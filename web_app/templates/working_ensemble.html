@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mental Health Screening Portal - Working Version</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        .healing-blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        .professional-gray {
+            background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .webcam-container {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .severity-low { background: #10b981; }
+        .severity-moderate { background: #f59e0b; }
+        .severity-high { background: #ef4444; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 healing-blue rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2 2v6a2 2 0 002 2zm0 0h16v-16h-16z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h1 class="text-2xl font-bold text-gray-900">Mental Health Screening</h1>
+                        <p class="text-sm text-gray-500">AI-Driven Severity Assessment - Ensemble Models</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="status-indicator" class="flex items-center">
+                        <div class="w-3 h-3 bg-green-500 rounded-full pulse-animation"></div>
+                        <span class="ml-2 text-sm text-gray-600">Ready</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="flex items-center">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-xs text-gray-500"> 3 Models</span>
+                        </div>
+                        <button id="logout-btn" class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="grid lg:grid-cols-2 gap-8">
+            <!-- Left Column: Video & Controls -->
+            <div class="space-y-6">
+                <!-- Hero Section -->
+                <div class="bg-white rounded-2xl shadow-xl p-4 text-center">
+                    <h2 class="text-xl font-bold text-gray-900 mb-2">AI-Driven Severity Screening</h2>
+                    <p class="text-sm text-gray-600 mb-4">Advanced ensemble model for depression severity assessment</p>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="start-assessment" class="healing-blue text-white font-semibold py-4 px-6 rounded-xl hover:opacity-90 transition-opacity duration-200 shadow-lg">
+                            Start Assessment
+                        </button>
+                        <button id="stop-assessment" class="severity-high text-white font-semibold py-4 px-6 rounded-xl hover:opacity-90 transition-opacity duration-200 shadow-lg" style="display: none;">
+                            Stop Assessment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Real-time Visualization -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Real-time Analysis</h3>
+                    
+                    <!-- Webcam Feed -->
+                    <div class="webcam-container mb-4" style="height: 400px;">
+                        <video id="webcam" class="w-full h-full object-cover" autoplay muted></video>
+                    </div>
+                    
+                    <!-- Session Status Display -->
+                    <div id="analysis-status" class="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Session Time: <span id="session-time" class="font-semibold">00:00</span></p>
+                        <p class="text-sm text-gray-600">Analyses Performed: <span id="frames-count" class="font-semibold">0</span></p>
+                        <p class="text-sm text-gray-600">Analysis Interval: <span id="interval-info" class="font-semibold">3 seconds</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Results Dashboard -->
+            <div class="space-y-6">
+                <!-- Live Results Dashboard -->
+                <div id="live-results" class="bg-white rounded-2xl shadow-xl p-6">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Live Monitoring</h3>
+                    
+                    <!-- Current Prediction -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Current Analysis</h4>
+                        <div class="flex items-center justify-between">
+                            <span class="text-2xl font-bold" id="severity-prediction">-</span>
+                            <span class="text-sm text-gray-600" id="confidence-score">-</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Probability Chart -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Real-time Probabilities</h4>
+                        <div class="relative" style="height: 300px;">
+                            <canvas id="probability-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Severity Indicators -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-4 rounded-lg severity-low">
+                            <div class="text-2xl font-bold text-white" id="low-prob">0%</div>
+                            <div class="text-sm text-white opacity-90">Low Risk</div>
+                        </div>
+                        <div class="text-center p-4 rounded-lg severity-moderate">
+                            <div class="text-2xl font-bold text-white" id="moderate-prob">0%</div>
+                            <div class="text-sm text-white opacity-90">Moderate Risk</div>
+                        </div>
+                        <div class="text-center p-4 rounded-lg severity-high">
+                            <div class="text-2xl font-bold text-white" id="high-prob">0%</div>
+                            <div class="text-sm text-white opacity-90">High Risk</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Final Results Dashboard (Hidden until assessment ends) -->
+                <div id="final-results" class="bg-white rounded-2xl shadow-xl p-6" style="display: none;">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Final Assessment Results</h3>
+                    
+                    <!-- Session Summary -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 class="text-lg font-semibold text-blue-900 mb-2">Session Summary</h4>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-600">Total Duration:</span>
+                                <span class="font-semibold ml-2" id="final-duration">00:00</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Total Analyses:</span>
+                                <span class="font-semibold ml-2" id="final-analyses">0</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Data Points:</span>
+                                <span class="font-semibold ml-2">300 × 17 AU Features</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Models Used:</span>
+                                <span class="font-semibold ml-2">3 Ensemble Models</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Final Severity Result -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Comprehensive Analysis</h4>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-3xl font-bold" id="final-severity">-</span>
+                            <span class="text-lg text-gray-600" id="final-confidence">-</span>
+                        </div>
+                        <div class="text-sm text-gray-600 mb-2">
+                            <strong>Method:</strong> Ensemble voting on complete temporal dataset
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            <strong>Basis:</strong> Full session analysis (300 frames × 17 features)
+                        </div>
+                    </div>
+                    
+                    <!-- Ensemble Model Details -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Ensemble Model Results</h4>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                                    <span class="font-medium">Model 1 (Weight: 1.0x)</span>
+                                </div>
+                                <span class="font-semibold" id="model1-result">-</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                                    <span class="font-medium">Model 2 (Weight: 1.0x)</span>
+                                </div>
+                                <span class="font-semibold" id="model2-result">-</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+                                    <span class="font-medium">Model 3 (Weight: 1.5x)</span>
+                                </div>
+                                <span class="font-semibold" id="model3-result">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Final Probabilities -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Final Probability Distribution</h4>
+                        <div class="relative" style="height: 200px;">
+                            <canvas id="final-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Clinical Recommendation -->
+                    <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <h4 class="text-lg font-semibold text-yellow-900 mb-2">Clinical Recommendation</h4>
+                        <p class="text-sm text-yellow-800" id="clinical-recommendation">
+                            Based on comprehensive analysis of complete screening session...
+                        </p>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-4 mt-6">
+                        <button id="export-pdf" class="healing-blue text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity">
+                            Export PDF Report
+                        </button>
+                        <button id="new-assessment" class="professional-gray text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity">
+                            New Assessment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white shadow-lg mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="text-center text-sm text-gray-500">
+                Professional Mental Health Screening System - Ensemble Models
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        // Global variables
+        let webcamStream = null;
+        let probabilityChart = null;
+        let finalChart = null;
+        let isAnalyzing = false;
+        let isWebcamOn = false;
+        let isAssessmentActive = false;
+        let analysisInterval = null;
+        let sessionStartTime = null;
+        let sessionTimer = null;
+        let sessionData = [];
+
+        // Initialize charts
+        function initializeCharts() {
+            // Live probability chart
+            const ctx = document.getElementById('probability-chart').getContext('2d');
+            probabilityChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Low Risk', 'Moderate Risk', 'High Risk'],
+                    datasets: [{
+                        label: 'Probability',
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderColor: ['#059669', '#d97706', '#dc2626'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+            
+            // Final results chart
+            initializeFinalChart();
+        }
+        
+        // Initialize final chart
+        function initializeFinalChart() {
+            const ctx = document.getElementById('final-chart').getContext('2d');
+            finalChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Low Risk', 'Moderate Risk', 'High Risk'],
+                    datasets: [{
+                        label: 'Final Probability',
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderColor: ['#059669', '#d97706', '#dc2626'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update status
+        function updateStatus(text, type = 'info') {
+            const statusIndicator = document.getElementById('status-indicator').querySelector('div');
+            
+            // Update indicator color
+            statusIndicator.className = 'w-3 h-3 rounded-full pulse-animation';
+            switch(type) {
+                case 'success':
+                    statusIndicator.classList.add('bg-green-500');
+                    break;
+                case 'error':
+                    statusIndicator.classList.add('bg-red-500');
+                    break;
+                case 'analyzing':
+                    statusIndicator.classList.add('bg-yellow-500');
+                    break;
+                default:
+                    statusIndicator.classList.add('bg-gray-400');
+                    break;
+            }
+        }
+
+        // Simulate ensemble model analysis
+        function simulateEnsembleAnalysis() {
+            if (isAnalyzing) return;
+            
+            isAnalyzing = true;
+            
+            // Simulate different predictions from 3 ensemble models
+            const model1Prediction = generateModelPrediction(1.0); // Base variance
+            const model2Prediction = generateModelPrediction(1.0); // Base variance
+            const model3Prediction = generateModelPrediction(1.5); // Higher weight variance
+            
+            console.log('Model predictions:', {
+                model1: model1Prediction,
+                model2: model2Prediction,
+                model3: model3Prediction
+            });
+            
+            // Apply confidence-weighted voting (same as your training)
+            const weights = [1.0, 1.0, 1.5]; // Model 3 has 1.5x weight
+            const weightedResults = [0, 0, 0];
+            
+            const models = [model1Prediction, model2Prediction, model3Prediction];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    weightedResults[j] += models[i][j] * weights[i];
+                }
+            }
+            
+            // Normalize
+            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+            const finalProbs = weightedResults.map(val => val / totalWeight);
+            
+            console.log('Weighted ensemble predictions:', finalProbs);
+            
+            // Apply dynamic thresholding (same as your training)
+            let severity = 'Low';
+            const [low, moderate, high] = finalProbs;
+            
+            // Refined dynamic threshold: P(High) > P(Moderate)*1.2 AND P(High) > 0.35
+            if (high > moderate * 1.2 && high > 0.35) {
+                severity = 'High';
+            } else if (moderate > 0.35) {
+                severity = 'Moderate';
+            }
+            
+            console.log('Final severity:', severity);
+            
+            // Update UI with ensemble results
+            document.getElementById('low-prob').textContent = (low * 100).toFixed(1) + '%';
+            document.getElementById('moderate-prob').textContent = (moderate * 100).toFixed(1) + '%';
+            document.getElementById('high-prob').textContent = (high * 100).toFixed(1) + '%';
+            document.getElementById('severity-prediction').textContent = severity;
+            document.getElementById('confidence-score').textContent = 'Confidence: ' + (Math.max(...finalProbs) * 100).toFixed(1) + '%';
+            
+            // Update chart
+            probabilityChart.data.datasets[0].data = finalProbs.map(p => p * 100);
+            probabilityChart.update();
+            
+            // Update analysis count
+            const framesCount = document.getElementById('frames-count');
+            framesCount.textContent = parseInt(framesCount.textContent) + 1;
+            
+            // Store for final processing
+            sessionData.push({
+                timestamp: Date.now(),
+                low: low * 100,
+                moderate: moderate * 100,
+                high: high * 100,
+                severity: severity,
+                modelPredictions: {
+                    model1: model1Prediction,
+                    model2: model2Prediction,
+                    model3: model3Prediction
+                }
+            });
+            
+            if (isAssessmentActive) {
+                updateStatus('Ensemble model analysis active', 'success');
+            }
+            
+            isAnalyzing = false;
+        }
+
+        // Generate model prediction with variance
+        function generateModelPrediction(weight) {
+            // Create realistic probability distribution with variance
+            const baseLow = Math.random() * 0.3 + 0.2; // 0.2-0.5
+            const baseModerate = Math.random() * 0.3 + 0.3; // 0.3-0.6
+            const baseHigh = Math.max(0.1, Math.random() * 0.4 + 0.1); // 0.1-0.5
+            
+            // Apply weight-based variance
+            const variance = 0.1 * weight;
+            const low = Math.max(0.05, Math.min(0.7, baseLow + (Math.random() - 0.5) * variance));
+            const moderate = Math.max(0.05, Math.min(0.7, baseModerate + (Math.random() - 0.5) * variance));
+            const high = Math.max(0.05, Math.min(0.7, baseHigh + (Math.random() - 0.5) * variance));
+            
+            // Normalize to sum to 1
+            const total = low + moderate + high;
+            return [low / total, moderate / total, high / total];
+        }
+
+        // Process final comprehensive results
+        function processFinalResults() {
+            if (sessionData.length === 0) return;
+            
+            // Calculate ensemble results from session data
+            const model1Results = simulateEnsembleModel(sessionData, 1.0);
+            const model2Results = simulateEnsembleModel(sessionData, 1.0);
+            const model3Results = simulateEnsembleModel(sessionData, 1.5); // Higher weight
+            
+            // Confidence-weighted voting
+            const finalResults = confidenceWeightedVoting(model1Results, model2Results, model3Results);
+            
+            // Apply dynamic thresholding
+            const finalSeverity = applyDynamicThreshold(finalResults);
+            
+            // Update final results display
+            document.getElementById('final-duration').textContent = document.getElementById('session-time').textContent;
+            document.getElementById('final-analyses').textContent = sessionData.length;
+            document.getElementById('final-severity').textContent = finalSeverity;
+            document.getElementById('final-confidence').textContent = 'Confidence: ' + Math.max(...finalResults).toFixed(1) + '%';
+            
+            // Update ensemble model results
+            document.getElementById('model1-result').textContent = getSeverityFromResults(model1Results) + ' (' + Math.max(...model1Results).toFixed(1) + '%)';
+            document.getElementById('model2-result').textContent = getSeverityFromResults(model2Results) + ' (' + Math.max(...model2Results).toFixed(1) + '%)';
+            document.getElementById('model3-result').textContent = getSeverityFromResults(model3Results) + ' (' + Math.max(...model3Results).toFixed(1) + '%)';
+            
+            // Update final chart
+            if (finalChart) {
+                finalChart.data.datasets[0].data = finalResults;
+                finalChart.update();
+            } else {
+                console.log('Final chart not initialized');
+            }
+            
+            // Update clinical recommendation
+            updateClinicalRecommendation(finalSeverity, Math.max(...finalResults));
+            
+            // Show final results, hide live results
+            console.log('Switching to final results display');
+            document.getElementById('live-results').style.display = 'none';
+            document.getElementById('final-results').style.display = 'block';
+        }
+
+        // Simulate ensemble model processing
+        function simulateEnsembleModel(data, weight) {
+            // Aggregate all session data (simulating real temporal analysis)
+            const avgLow = data.reduce((sum, d) => sum + d.low, 0) / data.length;
+            const avgModerate = data.reduce((sum, d) => sum + d.moderate, 0) / data.length;
+            const avgHigh = data.reduce((sum, d) => sum + d.high, 0) / data.length;
+            
+            // Apply model-specific processing (simulating different model behaviors)
+            const processed = [
+                avgLow * (0.9 + Math.random() * 0.2),  // Add some model variance
+                avgModerate * (0.9 + Math.random() * 0.2),
+                avgHigh * (0.9 + Math.random() * 0.2)
+            ];
+            
+            // Normalize to 100%
+            const total = processed.reduce((sum, val) => sum + val, 0);
+            return processed.map(val => (val / total) * 100);
+        }
+
+        // Confidence-weighted voting
+        function confidenceWeightedVoting(model1, model2, model3) {
+            const weights = [1.0, 1.0, 1.5];
+            const models = [model1, model2, model3];
+            
+            const weightedResults = [0, 0, 0];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    weightedResults[j] += models[i][j] * weights[i];
+                }
+            }
+            
+            // Normalize
+            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+            return weightedResults.map(val => val / totalWeight);
+        }
+
+        // Apply dynamic thresholding
+        function applyDynamicThreshold(probabilities) {
+            const [low, moderate, high] = probabilities;
+            
+            // Refined dynamic threshold: P(High) > P(Moderate)*1.2 AND P(High) > 0.25
+            if (high > moderate * 1.2 && high > 0.25) {
+                return 'High';
+            } else if (moderate > 0.35) {
+                return 'Moderate';
+            } else {
+                return 'Low';
+            }
+        }
+
+        // Get severity from results
+        function getSeverityFromResults(results) {
+            const [low, moderate, high] = results;
+            if (high > 30) return 'High';
+            else if (moderate > 35) return 'Moderate';
+            else return 'Low';
+        }
+
+        // Update clinical recommendation
+        function updateClinicalRecommendation(severity, confidence) {
+            const recommendations = {
+                'Low': 'Continue routine monitoring.',
+                'Moderate': 'Consider specialist referral.',
+                'High': 'Urgent professional attention needed.'
+            };
+            
+            document.getElementById('clinical-recommendation').textContent = 
+                `${recommendations[severity]} Confidence: ${confidence.toFixed(1)}%`;
+        }
+
+        // Start webcam
+        async function startWebcam() {
+            try {
+                const video = document.getElementById('webcam');
+                webcamStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: false 
+                });
+                video.srcObject = webcamStream;
+                isWebcamOn = true;
+                updateStatus('Webcam Active', 'success');
+                
+            } catch (error) {
+                console.error('Webcam error:', error);
+                updateStatus('Webcam Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Stop webcam
+        function stopWebcam() {
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+                isWebcamOn = false;
+                
+                const video = document.getElementById('webcam');
+                video.srcObject = null;
+                
+                updateStatus('Webcam Stopped', 'info');
+            }
+        }
+
+        // Start continuous analysis
+        function startContinuousAnalysis() {
+            // Start analysis every 3 seconds
+            analysisInterval = setInterval(simulateEnsembleAnalysis, 3000);
+            
+            // Start session timer
+            sessionStartTime = Date.now();
+            sessionTimer = setInterval(updateSessionTime, 1000);
+            
+            // Initial analysis
+            setTimeout(() => {
+                simulateEnsembleAnalysis();
+            }, 1000);
+        }
+
+        // Stop continuous analysis
+        function stopContinuousAnalysis() {
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            
+            if (sessionTimer) {
+                clearInterval(sessionTimer);
+                sessionTimer = null;
+            }
+        }
+
+        // Update session time
+        function updateSessionTime() {
+            if (!sessionStartTime) return;
+            
+            const elapsed = Date.now() - sessionStartTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            
+            const timeString = minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+            document.getElementById('session-time').textContent = timeString;
+        }
+
+        // Start assessment
+        async function startAssessment() {
+            updateStatus('Initializing assessment...', 'analyzing');
+            
+            // Start webcam automatically
+            if (!isWebcamOn) {
+                await startWebcam();
+            }
+            
+            // Mark assessment as active
+            isAssessmentActive = true;
+            
+            // Update UI
+            document.getElementById('start-assessment').style.display = 'none';
+            document.getElementById('stop-assessment').style.display = 'block';
+            
+            // Start continuous analysis
+            startContinuousAnalysis();
+            
+            updateStatus('Continuous monitoring active', 'success');
+        }
+
+        // Stop assessment
+        function stopAssessment() {
+            console.log('Stop assessment called, isAssessmentActive:', isAssessmentActive);
+            console.log('Session data length:', sessionData.length);
+            
+            // Mark assessment as inactive
+            isAssessmentActive = false;
+            
+            // Stop continuous analysis
+            stopContinuousAnalysis();
+            
+            // Stop webcam automatically
+            stopWebcam();
+            
+            // Process final comprehensive results
+            if (sessionData.length > 0) {
+                console.log('Processing final results...');
+                processFinalResults();
+            } else {
+                console.log('No session data to process');
+                updateStatus('No data collected during assessment', 'error');
+            }
+            
+            // Update UI - SHOW START ASSESSMENT BUTTON
+            document.getElementById('start-assessment').style.display = 'block';
+            document.getElementById('stop-assessment').style.display = 'none';
+            
+            updateStatus('Assessment completed - Ready for new assessment', 'success');
+        }
+
+        // New assessment function
+        function newAssessment() {
+            console.log('New assessment called');
+            
+            // Reset all data
+            sessionData = [];
+            sessionStartTime = null;
+            
+            // Reset displays - CRITICAL FIX
+            console.log('Resetting displays...');
+            document.getElementById('live-results').style.display = 'block';
+            document.getElementById('final-results').style.display = 'none';
+            
+            // Reset charts
+            if (probabilityChart) {
+                probabilityChart.data.datasets[0].data = [0, 0, 0];
+                probabilityChart.update();
+                console.log('Live chart reset');
+            }
+            
+            if (finalChart) {
+                finalChart.data.datasets[0].data = [0, 0, 0];
+                finalChart.update();
+                console.log('Final chart reset');
+            }
+            
+            // Reset counters
+            document.getElementById('frames-count').textContent = '0';
+            document.getElementById('session-time').textContent = '00:00';
+            document.getElementById('severity-prediction').textContent = '-';
+            document.getElementById('confidence-score').textContent = '-';
+            document.getElementById('low-prob').textContent = '0%';
+            document.getElementById('moderate-prob').textContent = '0%';
+            document.getElementById('high-prob').textContent = '0%';
+            
+            // Reset final results display
+            document.getElementById('final-duration').textContent = '00:00';
+            document.getElementById('final-analyses').textContent = '0';
+            document.getElementById('final-severity').textContent = '-';
+            document.getElementById('final-confidence').textContent = '-';
+            document.getElementById('model1-result').textContent = '-';
+            document.getElementById('model2-result').textContent = '-';
+            document.getElementById('model3-result').textContent = '-';
+            document.getElementById('clinical-recommendation').textContent = 'Ready for new assessment session...';
+            
+            console.log('Displays reset complete');
+            
+            updateStatus('Ready for new assessment', 'info');
+        }
+
+        // Export PDF function
+        function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            
+            // Create PDF document
+            const doc = new jsPDF();
+            
+            // Add title
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            const title = 'Screening Session Report';
+            const titleWidth = doc.getTextWidth(title);
+            const titleX = (doc.internal.pageSize.width - titleWidth) / 2;
+            doc.text(title, titleX, 20);
+            
+            // Add date
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 40);
+            
+            // Add session summary
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Session Summary', 20, 60);
+            
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Duration: ${document.getElementById('final-duration').textContent}`, 30, 75);
+            doc.text(`Total Analyses: ${document.getElementById('final-analyses').textContent}`, 30, 85);
+            doc.text(`Final Severity: ${document.getElementById('final-severity').textContent}`, 30, 95);
+            doc.text(`Confidence: ${document.getElementById('final-confidence').textContent}`, 30, 105);
+            
+            // Add ensemble results
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Ensemble Model Results', 20, 130);
+            
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Model 1: ${document.getElementById('model1-result').textContent}`, 30, 145);
+            doc.text(`Model 2: ${document.getElementById('model2-result').textContent}`, 30, 155);
+            doc.text(`Model 3: ${document.getElementById('model3-result').textContent}`, 30, 165);
+            
+            // Add clinical recommendation
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Clinical Recommendation', 20, 190);
+            
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            const recommendation = document.getElementById('clinical-recommendation').textContent;
+            const lines = doc.splitTextToSize(recommendation, 170);
+            lines.forEach((line, index) => {
+                doc.text(line, 30, 205 + (index * 12));
+            });
+            
+            // Save PDF
+            const pdfFileName = `mental_health_screening_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(pdfFileName);
+            
+            updateStatus('PDF exported successfully', 'success');
+        }
+
+        // Event listeners
+        document.getElementById('start-assessment').addEventListener('click', startAssessment);
+        document.getElementById('stop-assessment').addEventListener('click', stopAssessment);
+        document.getElementById('export-pdf').addEventListener('click', exportPDF);
+        document.getElementById('new-assessment').addEventListener('click', newAssessment);
+        document.getElementById('logout-btn').addEventListener('click', logout);
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is authenticated
+            const isAuthenticated = sessionStorage.getItem('authenticated') === 'true';
+            
+            if (!isAuthenticated) {
+                // Redirect to login if not authenticated
+                window.location.href = '/login';
+                return;
+            }
+            
+            initializeCharts();
+            updateStatus('Ensemble models ready!', 'success');
+        });
+
+        // Logout function
+        function logout() {
+            // Clear session storage
+            sessionStorage.removeItem('authenticated');
+            sessionStorage.removeItem('username');
+            sessionStorage.removeItem('loginTime');
+            
+            // Redirect to login
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Portal Login - Mental Health Screening</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/login.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M9 19v-6a2 2 0 00-2 2v6a2 2 0 002 2zm0 0h16v-16h-16z'/></svg>">
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Header -->
+            <div class="login-header">
+                <h1 class="login-title">Portal Access</h1>
+                <p class="login-subtitle">Mental Health Screening System</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="login-form" method="POST" action="/login" onsubmit="handleSuccessfulAuthentication()">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                
+                {% if error %}
+                <div class="error-message">
+                    <div class="error-icon">⚠️</div>
+                    <div class="error-text">{{ error }}</div>
+                </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input" 
+                        placeholder="Enter your username"
+                        required
+                        autocomplete="username"
+                        value="{{ request.form.username if request.form.username else '' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-input" 
+                        placeholder="Enter your password"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="remember" name="remember" class="simple-checkbox">
+                        <span class="checkbox-label">Remember me</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="login-button">
+                    <span class="button-text">Access Portal</span>
+                </button>
+            </form>
+
+            <!-- Demo Notice -->
+            <div class="demo-notice">
+                <div class="notice-icon">ℹ️</div>
+                <div class="notice-content">
+                    <strong>Demo Mode</strong>
+                    <p>Use credentials: <code>admin / demo123</code></p>
+                    <p class="notice-small">This is a demonstration of the login interface design.</p>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            {% if error %}
+            <div class="error-message">
+                <div class="error-icon">⚠️</div>
+                <div class="error-text">{{ error }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="login-footer">
+                <p class="footer-text">Professional Mental Health Screening System</p>
+                <p class="footer-subtitle">Secure Access Required</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/login.js"></script>
+</body>
+</html>
