@@ -48,7 +48,7 @@
         <div class="success-message">
             <div class="success-icon">✓</div>
             <div class="success-text">Authentication Successful</div>
-            <div class="redirect-text">Redirecting to portal...</div>
+            <div class="redirect-text">Redirecting to dashboard...</div>
         </div>
     </div>
 
@@ -58,9 +58,9 @@
         sessionStorage.setItem('username', '{{ username }}');
         sessionStorage.setItem('loginTime', new Date().toISOString());
         
-        // Redirect to portal after a short delay
+        // Redirect to dashboard after a short delay
         setTimeout(() => {
-            window.location.href = '/portal';
+            window.location.href = '/dashboard';
         }, 1000);
     </script>
 </body>

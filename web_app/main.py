@@ -241,6 +241,16 @@ def logout():
     
     return redirect(url_for('login'))
 
+@app.route('/dashboard')
+@login_required
+@rate_limit(max_requests=30, window_seconds=300)  # 30 requests per 5 minutes
+def dashboard():
+    """Serve dashboard page"""
+    try:
+        return render_template('dashboard.html')
+    except:
+        return "Dashboard file not found. Please ensure dashboard.html exists in templates folder.", 404
+
 @app.route('/portal')
 @login_required
 @rate_limit(max_requests=30, window_seconds=300)  # 30 requests per 5 minutes

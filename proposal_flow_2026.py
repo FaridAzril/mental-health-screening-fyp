@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Project Proposal Process Flow - Clean Rebuild
-4-Class Depression Severity Classification
+3-Class Depression Severity Classification
 Following Exact Technical Steps from Presentation
 """
 
