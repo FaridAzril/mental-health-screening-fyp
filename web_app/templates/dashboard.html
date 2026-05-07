@@ -255,6 +255,9 @@
         // Check authentication
         function checkAuth() {
             const isAuthenticated = sessionStorage.getItem('authenticated');
+            const userRole = sessionStorage.getItem('userRole');
+            const userName = sessionStorage.getItem('userName');
+            
             if (!isAuthenticated) {
                 window.location.href = '/login';
             }

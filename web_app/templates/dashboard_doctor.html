@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Doctor Dashboard - Mental Health Screening System</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        .healing-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
+        .sidebar-link { transition: all 0.2s ease; }
+        .sidebar-link:hover, .sidebar-link.active { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .severity-high { background: #fef2f2; border-left: 4px solid #ef4444; }
+        .severity-moderate { background: #fffbeb; border-left: 4px solid #f59e0b; }
+        .severity-low { background: #f0fdf4; border-left: 4px solid #22c55e; }
+    </style>
+</head>
+<body class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-lg flex flex-col min-h-screen">
+        <div class="p-6 border-b">
+            <h1 class="text-lg font-bold text-gray-900">Mental Health</h1>
+            <p class="text-xs text-gray-500">Screening System</p>
+        </div>
+        <nav class="flex-1 p-4 space-y-1">
+            <a href="#" onclick="showTab('dashboard')" class="sidebar-link active flex items-center px-4 py-3 rounded-lg text-sm">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+                Dashboard
+            </a>
+            <a href="/portal" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Screening Portal
+            </a>
+            <a href="#" onclick="showTab('patients')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                My Patients
+            </a>
+            <a href="#" onclick="showTab('screenings')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                My Screenings
+            </a>
+        </nav>
+        <div class="p-4 border-t">
+            <div class="flex items-center">
+                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">D</div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900">{{ user.name }}</p>
+                    <p class="text-xs text-gray-500">Doctor</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Doctor Dashboard</h2>
+                <p class="text-sm text-gray-500">Patient management and screening tools</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span class="ml-2 text-sm text-gray-600">System Online</span>
+                </div>
+                <a href="/logout" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Logout</a>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="flex-1 p-6 overflow-auto">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard">
+                
+                <!-- Quick Actions -->
+                <div class="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <a href="/portal" class="block h-full">
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover border-l-4 border-blue-500 h-full">
+                                    <div class="flex items-center justify-between h-full">
+                                        <div>
+                                            <h4 class="text-lg font-semibold text-gray-900">Start Screening</h4>
+                                            <p class="text-sm text-gray-600 mt-1">Begin new assessment</p>
+                                        </div>
+                                        <div class="w-10 h-10 healing-blue rounded-lg flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+
+                            <a href="#" onclick="showTab('patients')" class="block h-full">
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover border-l-4 border-green-500 h-full">
+                                    <div class="flex items-center justify-between h-full">
+                                        <div>
+                                            <h4 class="text-lg font-semibold text-gray-900">View My Patients</h4>
+                                            <p class="text-sm text-gray-600 mt-1">Manage patient records</p>
+                                        </div>
+                                        <div class="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+
+                            <a href="#" onclick="showTab('screenings')" class="block h-full">
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover border-l-4 border-purple-500 h-full">
+                                    <div class="flex items-center justify-between h-full">
+                                        <div>
+                                            <h4 class="text-lg font-semibold text-gray-900">Screening History</h4>
+                                            <p class="text-sm text-gray-600 mt-1">Review past results</p>
+                                        </div>
+                                        <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Patients -->
+            <div id="tab-patients" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">My Patients</h3>
+                        <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50">Back to Dashboard</button>
+                    </div>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                                <input type="text" id="doctor-patient-search" placeholder="Search by name, medical ID, contact..." 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                                <select id="doctor-patient-date-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Time</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                    <option value="year">This Year</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Has Remarks</label>
+                                <select id="doctor-patient-remarks-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Patients</option>
+                                    <option value="has">Has Remarks</option>
+                                    <option value="no">No Remarks</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex justify-end">
+                            <button onclick="applyDoctorPatientFilters()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 mr-2">Apply Filters</button>
+                            <button onclick="clearDoctorPatientFilters()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b text-left text-gray-500">
+                                    <th class="pb-3 font-medium">Name</th>
+                                    <th class="pb-3 font-medium">Medical ID</th>
+                                    <th class="pb-3 font-medium">Contact</th>
+                                    <th class="pb-3 font-medium">Emergency Contact</th>
+                                    <th class="pb-3 font-medium">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patients-table" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="patients-empty" class="text-center text-gray-400 py-8 hidden">No patients assigned</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Screenings -->
+            <div id="tab-screenings" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">My Screening History</h3>
+                        <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50">Back to Dashboard</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b text-left text-gray-500">
+                                    <th class="pb-3 font-medium">Patient</th>
+                                    <th class="pb-3 font-medium">Severity</th>
+                                    <th class="pb-3 font-medium">Confidence</th>
+                                    <th class="pb-3 font-medium">Notes</th>
+                                    <th class="pb-3 font-medium">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="screenings-table" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="screenings-empty" class="text-center text-gray-400 py-8 hidden">No screenings found</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Define global functions first
+        window.viewPatientDetail = async function(patientId) {
+            console.log('Viewing patient detail for ID:', patientId);
+            try {
+                const resp = await fetch(`/api/patients/${patientId}`);
+                const data = await resp.json();
+                console.log('Patient detail response:', data);
+                if (data.patient) {
+                    showPatientModal(data.patient);
+                } else {
+                    alert('Error loading patient detail: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) { 
+                console.error('Error viewing patient detail:', e); 
+                alert('Error loading patient detail. Please check console for details.');
+            }
+        };
+
+        window.startScreening = function(patientId) {
+            console.log('Starting screening for patient ID:', patientId);
+            window.location.href = `/portal/${patientId}`;
+        };
+
+        window.editRemarks = async function(patientId) {
+            console.log('Editing remarks for patient ID:', patientId);
+            showRemarksModal(patientId);
+        };
+
+        function showTab(tab) {
+            // Hide all tabs
+            ['tab-dashboard','tab-patients','tab-screenings'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            // Show selected tab
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+
+            // Update sidebar navigation highlighting
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
+                link.classList.add('text-gray-600');
+            });
+
+            // Add active state to selected tab
+            const tabNames = { 'dashboard': 'Dashboard', 'patients': 'My Patients', 'screenings': 'My Screenings' };
+            const activeLink = Array.from(document.querySelectorAll('.sidebar-link')).find(link =>
+                link.textContent.trim() === tabNames[tab]
+            );
+            if (activeLink) {
+                activeLink.classList.remove('text-gray-600');
+                activeLink.classList.add('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
+            }
+
+            // Load data for specific tabs
+            if (tab === 'patients') loadPatients();
+            if (tab === 'screenings') loadScreenings();
+        }
+
+        async function loadPatients() {
+            try {
+                const resp = await fetch('/api/patients');
+                const data = await resp.json();
+                window.allDoctorPatients = data.patients || [];
+                const tbody = document.getElementById('patients-table');
+                const empty = document.getElementById('patients-empty');
+                if (window.allDoctorPatients.length > 0) {
+                    empty.classList.add('hidden');
+                    displayDoctorPatients(window.allDoctorPatients);
+                } else { 
+                    empty.classList.remove('hidden'); 
+                    tbody.innerHTML = ''; 
+                }
+            } catch(e) { console.error('Error loading patients:', e); }
+        }
+
+        function displayDoctorPatients(patients) {
+            const tbody = document.getElementById('patients-table');
+            const empty = document.getElementById('patients-empty');
+            if (patients.length > 0) {
+                empty.classList.add('hidden');
+                tbody.innerHTML = patients.map(p => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b';
+                    row.innerHTML = `
+                        <td class="py-3">${p.name || '-'}</td>
+                        <td class="py-3">${p.medical_id || '-'}</td>
+                        <td class="py-3">${p.contact_number || '-'}</td>
+                        <td class="py-3">${p.emergency_contact || '-'}</td>
+                        <td class="py-3">
+                            <button data-action="view" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-2">View</button>
+                            <button data-action="screen" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 mr-2">Screen</button>
+                            <button data-action="remarks" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600">Remarks</button>
+                        </td>
+                    `;
+                    return row.outerHTML;
+                }).join('');
+            } else { 
+                empty.classList.remove('hidden'); 
+                tbody.innerHTML = ''; 
+            }
+        }
+
+        function applyDoctorPatientFilters() {
+            const searchTerm = document.getElementById('doctor-patient-search').value.toLowerCase();
+            const dateFilter = document.getElementById('doctor-patient-date-filter').value;
+            const remarksFilter = document.getElementById('doctor-patient-remarks-filter').value;
+            
+            let filtered = window.allDoctorPatients.filter(patient => {
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    (patient.name && patient.name.toLowerCase().includes(searchTerm)) ||
+                    (patient.medical_id && patient.medical_id.toLowerCase().includes(searchTerm)) ||
+                    (patient.contact_number && patient.contact_number.toLowerCase().includes(searchTerm)) ||
+                    (patient.emergency_contact && patient.emergency_contact.toLowerCase().includes(searchTerm));
+                
+                // Date filter
+                let dateMatch = true;
+                if (dateFilter && patient.created_at) {
+                    const patientDate = new Date(patient.created_at);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    switch(dateFilter) {
+                        case 'today':
+                            dateMatch = patientDate >= today;
+                            break;
+                        case 'week':
+                            const weekAgo = new Date(today);
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            dateMatch = patientDate >= weekAgo;
+                            break;
+                        case 'month':
+                            const monthAgo = new Date(today);
+                            monthAgo.setMonth(monthAgo.getMonth() - 1);
+                            dateMatch = patientDate >= monthAgo;
+                            break;
+                        case 'year':
+                            const yearAgo = new Date(today);
+                            yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                            dateMatch = patientDate >= yearAgo;
+                            break;
+                    }
+                }
+                
+                // Remarks filter
+                let remarksMatch = true;
+                if (remarksFilter === 'has') {
+                    remarksMatch = patient.remarks && patient.remarks.trim() !== '';
+                } else if (remarksFilter === 'no') {
+                    remarksMatch = !patient.remarks || patient.remarks.trim() === '';
+                }
+                
+                return searchMatch && dateMatch && remarksMatch;
+            });
+            
+            displayDoctorPatients(filtered);
+        }
+
+        function clearDoctorPatientFilters() {
+            document.getElementById('doctor-patient-search').value = '';
+            document.getElementById('doctor-patient-date-filter').value = '';
+            document.getElementById('doctor-patient-remarks-filter').value = '';
+            displayDoctorPatients(window.allDoctorPatients);
+        }
+
+        async function loadScreenings() {
+            try {
+                const resp = await fetch('/api/screenings');
+                const data = await resp.json();
+                const tbody = document.getElementById('screenings-table');
+                const empty = document.getElementById('screenings-empty');
+                if (data.screenings && data.screenings.length > 0) {
+                    empty.classList.add('hidden');
+                    tbody.innerHTML = data.screenings.map(s => {
+                        const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
+                        return `<tr class="border-b ${sevClass}"><td class="py-3">${s.patient_id || '-'}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-'}</td><td class="py-3">${s.notes || '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                    }).join('');
+                } else { empty.classList.remove('hidden'); tbody.innerHTML = ''; }
+            } catch(e) { console.error('Error loading screenings:', e); }
+        }
+
+        
+        // Show remarks modal with read/write functionality
+        async function showRemarksModal(patientId) {
+            try {
+                // First get current patient data to load existing remarks
+                const resp = await fetch(`/api/patients/${patientId}`);
+                const data = await resp.json();
+                
+                if (!data.patient) {
+                    alert('Error loading patient data');
+                    return;
+                }
+                
+                const patient = data.patient;
+                
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-900">Patient Remarks</h3>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Patient Information</h4>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <p><strong>Name:</strong> ${patient.name || '-'}</p>
+                                <p><strong>Medical ID:</strong> ${patient.medical_id || '-'}</p>
+                                <p><strong>Contact:</strong> ${patient.contact_number || '-'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Current Remarks</h4>
+                            <div id="current-remarks" class="bg-blue-50 p-3 rounded-lg min-h-[60px] text-gray-700">
+                                ${patient.remarks || 'No remarks currently recorded.'}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Edit Remarks</h4>
+                            <textarea id="new-remarks" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="4" placeholder="Enter patient remarks here...">${patient.remarks || ''}</textarea>
+                        </div>
+                        
+                        <div class="flex justify-end space-x-3">
+                            <button id="cancel-remarks-btn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                            <button id="save-remarks-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Save Remarks</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                
+                // Focus on textarea and add event listeners
+                setTimeout(() => {
+                    const textarea = document.getElementById('new-remarks');
+                    if (textarea) textarea.focus();
+                    
+                    // Add event listeners for buttons
+                    const cancelBtn = document.getElementById('cancel-remarks-btn');
+                    const saveBtn = document.getElementById('save-remarks-btn');
+                    
+                    if (cancelBtn) {
+                        cancelBtn.addEventListener('click', () => {
+                            modal.remove();
+                        });
+                    }
+                    
+                    if (saveBtn) {
+                        saveBtn.addEventListener('click', () => {
+                            saveRemarksFromModal(patientId, modal);
+                        });
+                    }
+                }, 100);
+                
+            } catch(e) {
+                console.error('Error showing remarks modal:', e);
+                alert('Error loading remarks modal');
+            }
+        }
+
+        // Save remarks from modal
+        async function saveRemarksFromModal(patientId, modal) {
+            const remarks = document.getElementById('new-remarks').value.trim();
+            try {
+                console.log('Saving remarks for patient:', patientId, remarks);
+                
+                const resp = await fetch(`/api/patients/${patientId}/remarks`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ remarks })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    alert('Remarks updated successfully');
+                    modal.remove();
+                    loadPatients(); // Refresh patients list
+                } else {
+                    alert('Error updating remarks: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) { 
+                console.error('Error updating remarks:', e); 
+                alert('Error updating remarks. Please check console for details.');
+            }
+        }
+
+        // Show patient detail modal
+        function showPatientModal(patient) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-gray-900">Patient Details</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">&times;</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">Personal Information</h4>
+                            <p><strong>Name:</strong> ${patient.name || '-'}</p>
+                            <p><strong>Medical ID:</strong> ${patient.medical_id || '-'}</p>
+                            <p><strong>Date of Birth:</strong> ${patient.date_of_birth || '-'}</p>
+                            <p><strong>Contact:</strong> ${patient.contact_number || '-'}</p>
+                            <p><strong>Emergency Contact:</strong> ${patient.emergency_contact || '-'}</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">Additional Information</h4>
+                            <p><strong>Occupation:</strong> ${patient.occupation || '-'}</p>
+                            <p><strong>Ethnicity:</strong> ${patient.ethnicity || '-'}</p>
+                            <p><strong>ID Number:</strong> ${patient.identification_number || '-'}</p>
+                            <div class="mt-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Remarks:</label>
+                                <div class="w-full p-2 border rounded-lg bg-gray-50 min-h-[60px] text-gray-700">
+                                    ${patient.remarks || 'No remarks recorded.'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <h4 class="font-semibold text-gray-700 mb-4">Screening History</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b text-left text-gray-500">
+                                        <th class="pb-3 font-medium">Date</th>
+                                        <th class="pb-3 font-medium">Severity</th>
+                                        <th class="pb-3 font-medium">Confidence</th>
+                                        <th class="pb-3 font-medium">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${patient.screenings && patient.screenings.length > 0 ? patient.screenings.map(s => {
+                                        const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
+                                        return `<tr class="border-b ${sevClass}">
+                                            <td class="py-3">${(s.created_at || '').substring(0,10)}</td>
+                                            <td class="py-3 font-semibold">${s.severity || '-'}</td>
+                                            <td class="py-3">${s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-'}</td>
+                                            <td class="py-3">${s.notes || '-'}</td>
+                                        </tr>`;
+                                    }).join('') : '<tr><td colspan="4" class="text-center py-4 text-gray-400">No screenings found</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        
+        // Test function to verify JavaScript is working
+        function testFunction() {
+            console.log('Test function called!');
+            console.log('viewPatientDetail function exists:', typeof window.viewPatientDetail);
+            console.log('startScreening function exists:', typeof window.startScreening);
+            console.log('editRemarks function exists:', typeof window.editRemarks);
+            alert('JavaScript is working! Test successful.');
+        }
+
+        // Add event delegation for patient action buttons
+        document.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (button) {
+                const action = button.dataset.action;
+                const patientId = button.dataset.patientId;
+                
+                console.log(`Button clicked: ${action} for patient ${patientId}`);
+                
+                if (action === 'view') {
+                    window.viewPatientDetail(patientId);
+                } else if (action === 'screen') {
+                    window.startScreening(patientId);
+                } else if (action === 'remarks') {
+                    window.editRemarks(patientId);
+                }
+            }
+        });
+
+        // Initialize - verify all functions are loaded
+        console.log('Doctor dashboard loaded - checking functions:');
+        console.log('viewPatientDetail:', typeof window.viewPatientDetail);
+        console.log('startScreening:', typeof window.startScreening);
+        console.log('editRemarks:', typeof window.editRemarks);
+
+        // Handle hash-based tab switching from sidebar links
+        const hash = window.location.hash.substring(1);
+        if (hash && ['patients', 'screenings', 'dashboard'].includes(hash)) {
+            showTab(hash);
+        }
+    </script>
+</body>
+</html>

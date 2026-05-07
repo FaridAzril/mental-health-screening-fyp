@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard - Mental Health Screening System</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        .healing-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
+        .sidebar-link { transition: all 0.2s ease; }
+        .sidebar-link:hover, .sidebar-link.active { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .severity-high { background: #fef2f2; border-left: 4px solid #ef4444; }
+        .severity-moderate { background: #fffbeb; border-left: 4px solid #f59e0b; }
+        .severity-low { background: #f0fdf4; border-left: 4px solid #22c55e; }
+        .modal-overlay { background: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-lg flex flex-col min-h-screen">
+        <div class="p-6 border-b">
+            <h1 class="text-lg font-bold text-gray-900">Mental Health</h1>
+            <p class="text-xs text-gray-500">Screening System</p>
+        </div>
+        <nav class="flex-1 p-4 space-y-1">
+            <a href="#" onclick="showTab('dashboard')" class="sidebar-link active flex items-center px-4 py-3 rounded-lg text-sm">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+                Dashboard
+            </a>
+            <a href="#" onclick="showTab('patients')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Patients
+            </a>
+            <a href="#" onclick="showTab('doctors')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Doctors
+            </a>
+            <a href="#" onclick="showTab('screenings')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Screenings
+            </a>
+        </nav>
+        <div class="p-4 border-t">
+            <div class="flex items-center">
+                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">A</div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900">{{ user.name }}</p>
+                    <p class="text-xs text-gray-500">Administrator</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Admin Dashboard</h2>
+                <p class="text-sm text-gray-500">User &amp; Access Governance</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span class="ml-2 text-sm text-gray-600">System Online</span>
+                </div>
+                <a href="/logout" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50">Logout</a>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="flex-1 p-6 overflow-auto">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard">
+                
+                <!-- Governance Actions -->
+                <div class="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Governance Actions</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button onclick="openModal('add-doctor')" class="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-lg p-4 transition">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center mr-4">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Create Doctor Account</p>
+                                        <p class="text-xs text-gray-500">Register a new doctor user</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <button onclick="openModal('add-patient')" class="w-full text-left bg-green-50 hover:bg-green-100 rounded-lg p-4 transition">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center mr-4">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Create Patient Record</p>
+                                        <p class="text-xs text-gray-500">Register new patient &amp; assign doctor</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <a href="#" onclick="showTab('patients')" class="block bg-blue-50 hover:bg-blue-100 rounded-lg p-4 transition">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 healing-blue rounded-lg flex items-center justify-center mr-4">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Manage Records</p>
+                                        <p class="text-xs text-gray-500">View &amp; update patients &amp; doctors</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patients Tab -->
+            <div id="tab-patients" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Patient Records</h3>
+                        <div class="flex space-x-3">
+                            <button onclick="openModal('add-patient')" class="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">+ Add Patient</button>
+                            <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                                <input type="text" id="patient-search" placeholder="Search by name, medical ID, contact..." 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Assigned Doctor</label>
+                                <select id="patient-doctor-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Doctors</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                                <select id="patient-date-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Time</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                    <option value="year">This Year</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex justify-end">
+                            <button onclick="applyPatientFilters()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 mr-2">Apply Filters</button>
+                            <button onclick="clearPatientFilters()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b text-left text-gray-500">
+                                    <th class="pb-3 font-medium">Name</th>
+                                    <th class="pb-3 font-medium">Medical ID</th>
+                                    <th class="pb-3 font-medium">Contact</th>
+                                    <th class="pb-3 font-medium">ID Number</th>
+                                    <th class="pb-3 font-medium">Occupation</th>
+                                    <th class="pb-3 font-medium">Assigned Doctor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patients-table" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="patients-empty" class="text-center text-gray-400 py-8 hidden">No patients found</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Doctors Tab -->
+            <div id="tab-doctors" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Doctor Accounts</h3>
+                        <div class="flex space-x-3">
+                            <button onclick="openModal('add-doctor')" class="px-4 py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">+ Add Doctor</button>
+                            <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                                <input type="text" id="doctor-search" placeholder="Search by name, ID, email..." 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
+                                <select id="doctor-specialization-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Specializations</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                                <select id="doctor-role-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">All Roles</option>
+                                    <option value="doctor">Doctor</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex justify-end">
+                            <button onclick="applyDoctorFilters()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 mr-2">Apply Filters</button>
+                            <button onclick="clearDoctorFilters()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Clear</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Specialization</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="doctors-table" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="doctors-empty" class="text-center text-gray-400 py-8 hidden">No doctors found</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenings Tab -->
+            <div id="tab-screenings" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">All Screenings</h3>
+                        <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b text-left text-gray-500">
+                                    <th class="pb-3 font-medium">Patient</th>
+                                    <th class="pb-3 font-medium">Doctor</th>
+                                    <th class="pb-3 font-medium">Severity</th>
+                                    <th class="pb-3 font-medium">Confidence</th>
+                                    <th class="pb-3 font-medium">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="screenings-table" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="screenings-empty" class="text-center text-gray-400 py-8 hidden">No screenings found</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Doctor Modal -->
+    <div id="modal-add-doctor" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Doctor Account</h3>
+                <form id="form-add-doctor" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input type="text" name="name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" name="email" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input type="password" name="password" required minlength="6" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                        <select name="position" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select Position</option>
+                            <option value="Intern">Intern</option>
+                            <option value="Resident">Resident</option>
+                            <option value="Fellow">Fellow</option>
+                            <option value="Attending Physician">Attending Physician</option>
+                            <option value="Consultant">Consultant</option>
+                            <option value="Senior Consultant">Senior Consultant</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                        <select name="role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select Role</option>
+                            <option value="Staff Physician">Staff Physician</option>
+                            <option value="Department Head">Department Head</option>
+                            <option value="Medical Director">Medical Director</option>
+                            <option value="Chief Resident">Chief Resident</option>
+                            <option value="Clinical Supervisor">Clinical Supervisor</option>
+                            <option value="Teaching Faculty">Teaching Faculty</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
+                        <select name="specialization" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select Specialization</option>
+                            <option value="General Medicine">General Medicine</option>
+                            <option value="Cardiology">Cardiology</option>
+                            <option value="Surgery">Surgery</option>
+                            <option value="Psychiatry">Psychiatry</option>
+                            <option value="Pediatrics">Pediatrics</option>
+                            <option value="Obstetrics & Gynecology">Obstetrics & Gynecology</option>
+                            <option value="Oncology">Oncology</option>
+                            <option value="Neurology">Neurology</option>
+                            <option value="Radiology">Radiology</option>
+                            <option value="Dermatology">Dermatology</option>
+                            <option value="Pathology">Pathology</option>
+                            <option value="Anesthesiology">Anesthesiology</option>
+                            <option value="Emergency Medicine">Emergency Medicine</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">License Number</label>
+                        <input type="text" name="license_number" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div id="doctor-form-error" class="text-sm text-red-600 hidden"></div>
+                    <div class="flex space-x-3">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm">Create Doctor</button>
+                        <button type="button" onclick="closeModal('add-doctor')" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                    </div>
+                </form>
+        </div>
+    </div>
+    
+    <!-- Add Patient Modal -->
+    <div id="modal-add-patient" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Patient Record</h3>
+            <form id="form-add-patient" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" name="name" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                    <input type="date" name="date_of_birth" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                    <input type="tel" name="contact_number" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="+60123456789">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
+                    <input type="tel" name="emergency_contact" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="+60123456789">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Identification Number</label>
+                    <input type="text" name="identification_number" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123456-78-9012">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Occupation</label>
+                    <input type="text" name="occupation" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Engineer, Teacher, Student">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ethnicity</label>
+                    <select name="ethnicity" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select Ethnicity</option>
+                        <option value="malay">Malay</option>
+                        <option value="chinese">Chinese</option>
+                        <option value="indian">Indian</option>
+                        <option value="others">Others</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Assign Doctor</label>
+                    <select name="doctor_id" id="patient-doctor-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">-- Select Doctor --</option>
+                    </select>
+                </div>
+                <div id="patient-form-error" class="text-sm text-red-600 hidden"></div>
+                <div class="flex space-x-3">
+                    <button type="submit" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">Create Patient</button>
+                    <button type="button" onclick="closeModal('add-patient')" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- Tab Navigation ---
+        function showTab(tab) {
+            // Hide all tabs
+            ['tab-dashboard','tab-patients','tab-doctors','tab-screenings'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            // Show selected tab
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            
+            // Update sidebar navigation highlighting
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
+                link.classList.add('text-gray-600');
+            });
+            
+            // Add active state to selected tab
+            const activeLink = Array.from(document.querySelectorAll('.sidebar-link')).find(link => 
+                link.textContent.trim().toLowerCase() === tab.toLowerCase() ||
+                (tab === 'dashboard' && link.textContent.trim().toLowerCase() === 'dashboard')
+            );
+            if (activeLink) {
+                activeLink.classList.remove('text-gray-600');
+                activeLink.classList.add('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
+            }
+            
+            // Load data for specific tabs
+            if (tab === 'patients') loadPatients();
+            if (tab === 'doctors') loadDoctors();
+            if (tab === 'screenings') loadScreenings();
+        }
+
+        // --- Modals ---
+        function openModal(type) {
+            document.getElementById('modal-' + type).classList.remove('hidden');
+            if (type === 'add-patient') {
+                // Load doctor options after opening modal
+                setTimeout(loadDoctorOptions, 100);
+            }
+        }
+        function closeModal(type) {
+            document.getElementById('modal-' + type).classList.add('hidden');
+        }
+
+        // --- Load Doctor Options for Patient Form ---
+        async function loadDoctorOptions() {
+            try {
+                const resp = await fetch('/api/doctors');
+                const data = await resp.json();
+                const select = document.getElementById('patient-doctor-select');
+                select.innerHTML = '<option value="">-- Select Doctor --</option>';
+                if (data.doctors && data.doctors.length > 0) {
+                    data.doctors.forEach(d => {
+                        select.innerHTML += `<option value="${d.id}">${d.name} - ${d.specialization || 'General'}</option>`;
+                    });
+                }
+            } catch(e) { console.error('Error loading doctors:', e); }
+        }
+
+        // --- Load Data ---
+        async function loadPatients() {
+            try {
+                const resp = await fetch('/api/patients');
+                const data = await resp.json();
+                window.allPatients = data.patients || [];
+                const tbody = document.getElementById('patients-table');
+                const empty = document.getElementById('patients-empty');
+                if (window.allPatients.length > 0) {
+                    empty.classList.add('hidden');
+                    displayPatients(window.allPatients);
+                    // Load doctor options for filter
+                    loadDoctorFilterOptions();
+                } else { 
+                    empty.classList.remove('hidden'); 
+                    tbody.innerHTML = ''; 
+                }
+            } catch(e) { console.error('Error loading patients:', e); }
+        }
+
+        function displayPatients(patients) {
+            const tbody = document.getElementById('patients-table');
+            const empty = document.getElementById('patients-empty');
+            if (patients.length > 0) {
+                empty.classList.add('hidden');
+                tbody.innerHTML = patients.map(p => `<tr class="border-b"><td class="py-3">${p.name || '-'}</td><td class="py-3">${p.medical_id || '-'}</td><td class="py-3">${p.contact_number || '-'}</td><td class="py-3">${p.identification_number || '-'}</td><td class="py-3">${p.occupation || '-'}</td><td class="py-3">${p.doctors?.name || '-'}</td></tr>`).join('');
+            } else { 
+                empty.classList.remove('hidden'); 
+                tbody.innerHTML = ''; 
+            }
+        }
+
+        async function loadDoctorFilterOptions() {
+            try {
+                const resp = await fetch('/api/doctors');
+                const data = await resp.json();
+                const select = document.getElementById('patient-doctor-filter');
+                select.innerHTML = '<option value="">All Doctors</option>';
+                if (data.doctors && data.doctors.length > 0) {
+                    data.doctors.forEach(d => {
+                        select.innerHTML += `<option value="${d.id}">${d.name} - ${d.specialization || 'General'}</option>`;
+                    });
+                }
+            } catch(e) { console.error('Error loading doctor filter options:', e); }
+        }
+
+        function applyPatientFilters() {
+            const searchTerm = document.getElementById('patient-search').value.toLowerCase();
+            const doctorFilter = document.getElementById('patient-doctor-filter').value;
+            const dateFilter = document.getElementById('patient-date-filter').value;
+            
+            let filtered = window.allPatients.filter(patient => {
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    (patient.name && patient.name.toLowerCase().includes(searchTerm)) ||
+                    (patient.medical_id && patient.medical_id.toLowerCase().includes(searchTerm)) ||
+                    (patient.contact_number && patient.contact_number.toLowerCase().includes(searchTerm));
+                
+                // Doctor filter
+                const doctorMatch = !doctorFilter || patient.assigned_doctor_id === doctorFilter;
+                
+                // Date filter
+                let dateMatch = true;
+                if (dateFilter && patient.created_at) {
+                    const patientDate = new Date(patient.created_at);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    switch(dateFilter) {
+                        case 'today':
+                            dateMatch = patientDate >= today;
+                            break;
+                        case 'week':
+                            const weekAgo = new Date(today);
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            dateMatch = patientDate >= weekAgo;
+                            break;
+                        case 'month':
+                            const monthAgo = new Date(today);
+                            monthAgo.setMonth(monthAgo.getMonth() - 1);
+                            dateMatch = patientDate >= monthAgo;
+                            break;
+                        case 'year':
+                            const yearAgo = new Date(today);
+                            yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                            dateMatch = patientDate >= yearAgo;
+                            break;
+                    }
+                }
+                
+                return searchMatch && doctorMatch && dateMatch;
+            });
+            
+            displayPatients(filtered);
+        }
+
+        function clearPatientFilters() {
+            document.getElementById('patient-search').value = '';
+            document.getElementById('patient-doctor-filter').value = '';
+            document.getElementById('patient-date-filter').value = '';
+            displayPatients(window.allPatients);
+        }
+
+        async function loadDoctors() {
+            try {
+                console.log('Loading doctors...');
+                const resp = await fetch('/api/doctors');
+                console.log('Doctors response status:', resp.status);
+                const data = await resp.json();
+                console.log('Doctors data:', data);
+                window.allDoctors = data.doctors || [];
+                const tbody = document.getElementById('doctors-table');
+                const empty = document.getElementById('doctors-empty');
+                console.log('Doctors count:', window.allDoctors.length);
+                
+                if (window.allDoctors.length > 0) {
+                    empty.classList.add('hidden');
+                    displayDoctors(window.allDoctors);
+                    // Load specialization options for filter
+                    loadSpecializationFilterOptions();
+                } else { 
+                    empty.classList.remove('hidden'); 
+                    tbody.innerHTML = ''; 
+                    console.log('No doctors found');
+                }
+            } catch(e) { console.error('Error loading doctors:', e); }
+        }
+
+        function displayDoctors(doctors) {
+            const tbody = document.getElementById('doctors-table');
+            const empty = document.getElementById('doctors-empty');
+            if (doctors.length > 0) {
+                empty.classList.add('hidden');
+                tbody.innerHTML = doctors.map(d => `<tr class="border-b"><td class="py-3 px-4">${d.name || '-'}</td><td class="py-3 px-4">${d.position || '-'}</td><td class="py-3 px-4">${d.role || '-'}</td><td class="py-3 px-4">${d.specialization || '-'}</td><td class="py-3 px-4">${d.hospital_id || '-'}</td></tr>`).join('');
+            } else { 
+                empty.classList.remove('hidden'); 
+                tbody.innerHTML = ''; 
+            }
+        }
+
+        function loadSpecializationFilterOptions() {
+            const specializations = [...new Set(window.allDoctors.map(d => d.specialization).filter(s => s))];
+            const select = document.getElementById('doctor-specialization-filter');
+            select.innerHTML = '<option value="">All Specializations</option>';
+            specializations.forEach(spec => {
+                select.innerHTML += `<option value="${spec}">${spec}</option>`;
+            });
+        }
+
+        function applyDoctorFilters() {
+            const searchTerm = document.getElementById('doctor-search').value.toLowerCase();
+            const specializationFilter = document.getElementById('doctor-specialization-filter').value;
+            const roleFilter = document.getElementById('doctor-role-filter').value;
+            
+            let filtered = window.allDoctors.filter(doctor => {
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    (doctor.name && doctor.name.toLowerCase().includes(searchTerm)) ||
+                    (doctor.hospital_id && doctor.hospital_id.toLowerCase().includes(searchTerm)) ||
+                    (doctor.email && doctor.email.toLowerCase().includes(searchTerm));
+                
+                // Specialization filter
+                const specializationMatch = !specializationFilter || doctor.specialization === specializationFilter;
+                
+                // Role filter
+                const roleMatch = !roleFilter || doctor.role === roleFilter;
+                
+                return searchMatch && specializationMatch && roleMatch;
+            });
+            
+            displayDoctors(filtered);
+        }
+
+        function clearDoctorFilters() {
+            document.getElementById('doctor-search').value = '';
+            document.getElementById('doctor-specialization-filter').value = '';
+            document.getElementById('doctor-role-filter').value = '';
+            displayDoctors(window.allDoctors);
+        }
+
+        async function loadScreenings() {
+            try {
+                const resp = await fetch('/api/screenings');
+                const data = await resp.json();
+                const tbody = document.getElementById('screenings-table');
+                const empty = document.getElementById('screenings-empty');
+                if (data.screenings && data.screenings.length > 0) {
+                    empty.classList.add('hidden');
+                    tbody.innerHTML = data.screenings.map(s => {
+                        const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
+                        return `<tr class="border-b ${sevClass}"><td class="py-3">${s.patient_id || '-'}</td><td class="py-3">${s.doctor_id || '-'}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                    }).join('');
+                } else { empty.classList.remove('hidden'); tbody.innerHTML = ''; }
+            } catch(e) { console.error('Error loading screenings:', e); }
+        }
+
+        // --- Form Submissions ---
+        document.getElementById('form-add-doctor').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            const errEl = document.getElementById('doctor-form-error');
+            errEl.classList.add('hidden');
+            
+            try {
+                const resp = await fetch('/api/doctors/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+                
+                if (resp.ok) {
+                    closeModal('add-doctor');
+                    form.reset();
+                    loadDoctors();
+                } else {
+                    errEl.textContent = result.error || 'Failed to create doctor';
+                    errEl.classList.remove('hidden');
+                }
+            } catch(e) {
+                errEl.textContent = 'Network error';
+                errEl.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('form-add-patient').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            const errEl = document.getElementById('patient-form-error');
+            try {
+                const resp = await fetch('/api/patients/create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+                if (resp.ok) {
+                    closeModal('add-patient');
+                    form.reset();
+                    loadPatients();
+                } else {
+                    errEl.textContent = result.error || 'Failed to create patient';
+                    errEl.classList.remove('hidden');
+                }
+            } catch(e) {
+                errEl.textContent = 'Network error';
+                errEl.classList.remove('hidden');
+            }
+        });
+
+        // --- Severity Bars ---
+        const statsData = {{ stats | tojson }};
+        
+        function updateBars() {
+            const total = statsData.total_screenings || 1;
+            const highCount = statsData.high_risk_count || 0;
+            const moderateCount = statsData.moderate_risk_count || 0;
+            const lowCount = statsData.low_risk_count || 0;
+            
+            document.getElementById('bar-high').style.width = (highCount/total*100) + '%';
+            document.getElementById('bar-moderate').style.width = (moderateCount/total*100) + '%';
+            document.getElementById('bar-low').style.width = (lowCount/total*100) + '%';
+        }
+
+        function editPatient(id) { alert('Edit patient: ' + id + ' (coming soon)'); }
+        function editDoctor(id) { alert('Edit doctor: ' + id + ' (coming soon)'); }
+
+        document.addEventListener('DOMContentLoaded', updateBars);
+    </script>
+</body>
+</html>

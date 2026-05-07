@@ -28,16 +28,16 @@
                 {% endif %}
                 
                 <div class="form-group">
-                    <label for="username" class="form-label">Username</label>
+                    <label for="email" class="form-label">Email</label>
                     <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
+                        type="email" 
+                        id="email" 
+                        name="email" 
                         class="form-input" 
-                        placeholder="Enter your username"
+                        placeholder="Enter your email"
                         required
-                        autocomplete="username"
-                        value="{{ request.form.username if request.form.username else '' }}"
+                        autocomplete="email"
+                        value="{{ request.form.email if request.form.email else '' }}"
                     >
                 </div>
 

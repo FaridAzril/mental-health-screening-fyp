@@ -14,6 +14,101 @@ import secrets
 from functools import wraps
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
+from supabase_client_working import supabase
+
+# Authentication functions
+def get_user_profile(user_id):
+    """Get user profile from database"""
+    try:
+        auth_token = None
+        if 'user' in session and session['user'].get('access_token'):
+            auth_token = session['user']['access_token']
+        
+        response = supabase.table('user_profiles').select('*').eq('id', user_id).execute(auth_token=auth_token)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                return data[0]
+        return None
+    except Exception as e:
+                return None
+
+def authenticate_user(email, password):
+    """Authenticate user with Supabase"""
+    try:
+        # Sign in with Supabase auth
+        auth_response = supabase.auth.sign_in_with_password({
+            'email': email,
+            'password': password
+        })
+        
+        # Check if authentication was successful
+        if auth_response.status_code == 200:
+            auth_data = auth_response.json()
+            
+            if 'access_token' in auth_data:
+                # Store user in session
+                session['user'] = {
+                    'id': auth_data.get('user', {}).get('id'),
+                    'email': email,
+                    'access_token': auth_data.get('access_token'),
+                    'refresh_token': auth_data.get('refresh_token')
+                }
+                session['last_activity'] = time.time()
+                session.modified = True
+                
+                # Get user profile
+                user_profile = get_user_profile(session['user']['id'])
+                if user_profile:
+                    session['user']['role'] = user_profile.get('role')
+                    session['user']['name'] = user_profile.get('name')
+                    session.modified = True
+                
+                return True, user_profile
+        
+        return False, None
+            
+    except Exception as e:
+                return False, None
+
+def logout_user():
+    """Logout user and clear session"""
+    try:
+        # Clear session
+        session.clear()
+        
+        # Sign out from Supabase
+        supabase.auth.sign_out()
+        
+        return True
+    except Exception as e:
+                return False
+
+def is_session_valid():
+    """Check if session is still valid"""
+    if 'user' not in session:
+        return False
+    
+    # Check if session is older than 24 hours
+    last_activity = session.get('last_activity', 0)
+    current_time = time.time()
+    
+    # 24 hours = 86400 seconds
+    if current_time - last_activity > 86400:
+        return False
+    
+    return True
+
+def login_required(f):
+    """Decorator to require login"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check if user is authenticated via Supabase
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = secrets.token_hex(32)  # Generate secure secret key
@@ -135,25 +230,7 @@ def validate_csrf_token():
 
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
-# Authentication decorator
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            log_security_event('UNAUTHORIZED_ACCESS', request.remote_addr, 'Attempted to access protected route')
-            return redirect(url_for('login'))
-        
-        # Check session timeout
-        last_activity = session.get('last_activity', time.time())
-        if time.time() - last_activity > app.config['PERMANENT_SESSION_LIFETIME'].total_seconds():
-            session.clear()
-            log_security_event('SESSION_TIMEOUT', request.remote_addr, 'Session expired')
-            return redirect(url_for('login'))
-        
-        # Update last activity
-        session['last_activity'] = time.time()
-        return f(*args, **kwargs)
-    return decorated_function
+# Old login_required removed - using Supabase-aware version defined above
 
 @app.before_request
 def before_request():
@@ -182,12 +259,12 @@ def index():
         return "Landing page not found. Please ensure landing.html exists in templates folder.", 404
 
 @app.route('/login', methods=['GET', 'POST'])
-@rate_limit(max_requests=10, window_seconds=300)  # 10 login attempts per 5 minutes
-@brute_force_protection(max_attempts=5, lockout_minutes=15)
+@rate_limit(max_requests=50, window_seconds=300)  # 50 requests per 5 minutes
+@brute_force_protection(max_attempts=15, lockout_minutes=5)
 def login():
     """Login page with security protections"""
     if request.method == 'POST':
-        username = request.form.get('username', '')
+        email = request.form.get('email', '')
         password = request.form.get('password', '')
         client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
         
@@ -197,34 +274,24 @@ def login():
             return render_template('login.html', error='Security validation failed')
         
         # Input validation
-        if not username or not password or len(username) > 50 or len(password) > 100:
-            log_security_event('INVALID_INPUT', client_ip, f'Invalid login input: username={len(username)}, password={len(password)}')
+        if not email or not password or len(email) > 50 or len(password) > 100:
+            log_security_event('INVALID_INPUT', client_ip, f'Invalid login input: email={len(email)}, password={len(password)}')
             return render_template('login.html', error='Invalid input')
         
-        # Demo authentication (in production, use proper database authentication)
-        if username == 'admin' and password == 'demo123':
-            session['user_id'] = username
-            session['username'] = username
-            session['login_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
-            session['last_activity'] = time.time()
+        # Supabase authentication
+        success, user_profile = authenticate_user(email, password)
+        
+        if success:
             session.permanent = True
-            
-            # Clear failed attempts on successful login
+            # Clear rate limit and failed attempts on successful login
             if client_ip in FAILED_LOGIN_ATTEMPTS:
-                del FAILED_LOGIN_ATTEMPTS[client_ip]
-            
-            log_security_event('SUCCESSFUL_LOGIN', client_ip, f'User {username} logged in')
-            
-            # Return HTML with sessionStorage setting
-            return render_template('login_success.html', username=username)
+                FAILED_LOGIN_ATTEMPTS[client_ip].clear()
+            if client_ip in BLOCKED_IPS:
+                BLOCKED_IPS.discard(client_ip)
+            log_security_event('SUCCESSFUL_LOGIN', client_ip, f'User {email} logged in')
+            return redirect(url_for('dashboard'))
         else:
-            # Log failed attempt
-            FAILED_LOGIN_ATTEMPTS[client_ip].append({
-                'timestamp': time.time(),
-                'username': username
-            })
-            
-            log_security_event('FAILED_LOGIN', client_ip, f'Failed login attempt for user: {username}')
+            log_security_event('FAILED_LOGIN', client_ip, f'Failed login attempt for user: {email}')
             return render_template('login.html', error='Invalid credentials')
     
     return render_template('login.html')
@@ -234,10 +301,10 @@ def login():
 def logout():
     """Logout user"""
     client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
-    username = session.get('username', 'unknown')
+    user_email = session.get('user', {}).get('email', 'unknown')
     
     session.clear()
-    log_security_event('LOGOUT', client_ip, f'User {username} logged out')
+    log_security_event('LOGOUT', client_ip, f'User {user_email} logged out')
     
     return redirect(url_for('login'))
 
@@ -245,19 +312,603 @@ def logout():
 @login_required
 @rate_limit(max_requests=30, window_seconds=300)  # 30 requests per 5 minutes
 def dashboard():
-    """Serve dashboard page"""
+    """Serve role-based dashboard"""
     try:
-        return render_template('dashboard.html')
-    except:
-        return "Dashboard file not found. Please ensure dashboard.html exists in templates folder.", 404
+        # Check if session is still valid
+        if not is_session_valid():
+            return redirect(url_for('login'))
+        
+        # Get user profile
+        user_id = session['user']['id']
+        user_profile = get_user_profile(user_id)
+        
+        if not user_profile:
+            return redirect(url_for('login'))
+        
+        auth_token = session['user'].get('access_token')
+        role = user_profile.get('role', '')
+        
+        # Get dashboard stats
+        stats = get_dashboard_stats(role, auth_token, user_id)
+        
+        if role == 'admin':
+            return render_template('dashboard_admin.html', 
+                user=user_profile, 
+                stats=stats)
+        elif role == 'doctor':
+            return render_template('dashboard_doctor.html', 
+                user=user_profile, 
+                stats=stats)
+        else:
+            return redirect(url_for('login'))
+            
+    except Exception as e:
+                return redirect(url_for('login'))
+
+def get_dashboard_stats(role, auth_token=None, user_id=None):
+    """Get dashboard statistics based on role"""
+    stats = {
+        'total_screenings': 0,
+        'today_sessions': 0,
+        'total_patients': 0,
+        'total_doctors': 0,
+        'high_risk_count': 0,
+        'moderate_risk_count': 0,
+        'low_risk_count': 0
+    }
+    try:
+        # For doctors, filter by their assigned patients
+        if role == 'doctor':
+            # Look up doctor's record id from doctors table using auth user_id
+            from supabase_client_working import SUPABASE_SERVICE_KEY
+            doctor_resp = supabase.table('doctors').select('id,name').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            if doctor_resp.status_code == 200:
+                doctors = doctor_resp.json()
+                if doctors:
+                    doctor_id = doctors[0]['id']
+                    
+                    # Filter patients by assigned_doctor_id = doctor_id (from doctors table)
+                    patients_resp = supabase.table('patients').select('id,name').eq('assigned_doctor_id', doctor_id).execute(auth_token=auth_token)
+                    if patients_resp.status_code == 200:
+                        patients = patients_resp.json()
+                        stats['total_patients'] = len(patients)
+            
+            # Get screenings for this doctor
+            screenings_resp = supabase.table('screenings').select('id,severity,created_at').eq('doctor_id', user_id).execute(auth_token=auth_token)
+            if screenings_resp.status_code == 200:
+                screenings = screenings_resp.json()
+                stats['total_screenings'] = len(screenings)
+                for s in screenings:
+                    sev = s.get('severity', '').lower()
+                    if sev == 'high':
+                        stats['high_risk_count'] += 1
+                    elif sev == 'moderate':
+                        stats['moderate_risk_count'] += 1
+                    elif sev == 'low':
+                        stats['low_risk_count'] += 1
+                    created = s.get('created_at', '')
+                    if created and created.startswith(time.strftime('%Y-%m-%d')):
+                        stats['today_sessions'] += 1
+        
+        # For admins, get all data
+        elif role == 'admin':
+            # Get all screenings
+            screenings_resp = supabase.table('screenings').select('id,severity,created_at').execute(auth_token=auth_token)
+            if screenings_resp.status_code == 200:
+                screenings = screenings_resp.json()
+                stats['total_screenings'] = len(screenings)
+                for s in screenings:
+                    sev = s.get('severity', '').lower()
+                    if sev == 'high':
+                        stats['high_risk_count'] += 1
+                    elif sev == 'moderate':
+                        stats['moderate_risk_count'] += 1
+                    elif sev == 'low':
+                        stats['low_risk_count'] += 1
+                    # Count today's sessions
+                    created = s.get('created_at', '')
+                    if created and created.startswith(time.strftime('%Y-%m-%d')):
+                        stats['today_sessions'] += 1
+            
+            # Get all patients
+            patients_resp = supabase.table('patients').select('id').execute(auth_token=auth_token)
+            if patients_resp.status_code == 200:
+                stats['total_patients'] = len(patients_resp.json())
+            
+            # Get all doctors
+            doctors_resp = supabase.table('doctors').select('id').execute(auth_token=auth_token)
+            if doctors_resp.status_code == 200:
+                stats['total_doctors'] = len(doctors_resp.json())
+    except Exception as e:
+            return stats
+
+@app.route('/api/dashboard/stats')
+@login_required
+def api_dashboard_stats():
+    """API endpoint for dashboard statistics"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        user_id = session['user']['id']
+        user_profile = get_user_profile(user_id)
+        if not user_profile:
+            return {'error': 'Profile not found'}, 404
+        auth_token = session['user'].get('access_token')
+        stats = get_dashboard_stats(user_profile.get('role', ''), auth_token)
+        return {'stats': stats, 'user': user_profile}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/patients')
+@login_required
+def api_patients():
+    """API endpoint to get patients list"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        auth_token = session['user'].get('access_token')
+        role = session['user'].get('role', '')
+        
+        if role == 'admin':
+            # Use service role key to join patients with doctors
+            from supabase_client_working import SUPABASE_SERVICE_KEY
+            resp = supabase.client.get(
+                f"{supabase.url}/rest/v1/patients?select=*,doctors(name)&order=created_at.desc",
+                headers={
+                    'apikey': SUPABASE_SERVICE_KEY,
+                    'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                    'Content-Type': 'application/json'
+                }
+            )
+        else:
+            # Doctor sees only their patients - lookup doctor.id from doctors table first
+            user_id = session['user']['id']
+            from supabase_client_working import SUPABASE_SERVICE_KEY
+            doctor_resp = supabase.table('doctors').select('id,name').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            if doctor_resp.status_code == 200:
+                doctors = doctor_resp.json()
+                if doctors:
+                    doctor_id = doctors[0]['id']
+                    resp = supabase.table('patients').select('*').eq('assigned_doctor_id', doctor_id).execute(auth_token=auth_token)
+                else:
+                    resp = type('obj', (), {'status_code': 200, 'json': lambda: []})()
+            else:
+                resp = type('obj', (), {'status_code': 200, 'json': lambda: []})()
+        
+        if resp.status_code == 200:
+            return {'patients': resp.json()}
+        return {'patients': []}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/screenings')
+@login_required
+def api_screenings():
+    """API endpoint to get screenings list"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        auth_token = session['user'].get('access_token')
+        role = session['user'].get('role', '')
+        
+        if role == 'admin':
+            resp = supabase.table('screenings').select('*').order('created_at', desc=True).execute(auth_token=auth_token)
+        else:
+            user_id = session['user']['id']
+            resp = supabase.table('screenings').select('*').eq('doctor_id', user_id).order('created_at', desc=True).execute(auth_token=auth_token)
+        
+        if resp.status_code == 200:
+            return {'screenings': resp.json()}
+        return {'screenings': []}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/patients/<patient_id>')
+@login_required
+def api_patient_detail(patient_id):
+    """API endpoint to get patient detail with screening history"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        auth_token = session['user'].get('access_token')
+        role = session['user'].get('role', '')
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        
+        # Get patient details
+        patient_resp = supabase.table('patients').select('*').eq('id', patient_id).execute(auth_token=auth_token)
+        if patient_resp.status_code != 200 or not patient_resp.json():
+            return {'error': 'Patient not found'}, 404
+        
+        patient = patient_resp.json()[0]
+        
+        # For doctors, verify this patient is assigned to them
+        if role == 'doctor':
+            user_id = session['user']['id']
+            doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            if doctor_resp.status_code == 200 and doctor_resp.json():
+                doctor_id = doctor_resp.json()[0]['id']
+                if patient.get('assigned_doctor_id') != doctor_id:
+                    return {'error': 'Unauthorized - not your patient'}, 403
+        
+        # Get screening history for this patient
+        screenings_resp = supabase.table('screenings').select('*').eq('patient_id', patient_id).order('created_at', desc=True).execute(auth_token=auth_token)
+        screenings = screenings_resp.json() if screenings_resp.status_code == 200 else []
+        
+        patient['screenings'] = screenings
+        return {'patient': patient}
+    except Exception as e:
+                return {'error': str(e)}, 500
+
+@app.route('/api/patients/<patient_id>/remarks', methods=['PUT'])
+@login_required
+def api_patient_remarks(patient_id):
+    """API endpoint to add/update patient remarks (doctor only)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'doctor':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        remarks = data.get('remarks', '').strip()
+        auth_token = session['user'].get('access_token')
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        
+        # Verify patient belongs to this doctor
+        user_id = session['user']['id']
+        doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if doctor_resp.status_code == 200 and doctor_resp.json():
+            doctor_id = doctor_resp.json()[0]['id']
+            patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
+            if patient_resp.status_code == 200 and patient_resp.json():
+                if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
+                    return {'error': 'Unauthorized - not your patient'}, 403
+        
+        # Update remarks using direct REST API call
+        update_resp = supabase.client.patch(
+            f"{supabase.url}/rest/v1/patients?id=eq.{patient_id}",
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {auth_token}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            json={'remarks': remarks}
+        )
+        if update_resp.status_code == 200:
+            return {'success': True, 'remarks': remarks}
+        else:
+                        return {'error': f'Failed to update remarks: {update_resp.text[:200]}'}, 400
+    except Exception as e:
+                return {'error': str(e)}, 500
+
+@app.route('/api/screenings/save', methods=['POST'])
+@login_required
+def api_save_screening():
+    """API endpoint to save screening result"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'doctor':
+            return {'error': 'Unauthorized - only doctors can save screenings'}, 403
+        
+        data = request.get_json()
+        patient_id = data.get('patient_id')
+        severity = data.get('severity', '').strip()
+        confidence_score = data.get('confidence_score')
+        notes = data.get('notes', '').strip()
+        
+        if not patient_id or not severity:
+            return {'error': 'Patient ID and severity are required'}, 400
+        
+        auth_token = session['user'].get('access_token')
+        user_id = session['user']['id']
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        
+        # Verify patient belongs to this doctor
+        doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if doctor_resp.status_code == 200 and doctor_resp.json():
+            doctor_id = doctor_resp.json()[0]['id']
+            patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
+            if patient_resp.status_code == 200 and patient_resp.json():
+                if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
+                    return {'error': 'Unauthorized - not your patient'}, 403
+        
+        screening_data = {
+            'patient_id': patient_id,
+            'doctor_id': user_id,
+            'severity': severity,
+            'notes': notes
+        }
+        if confidence_score is not None:
+            screening_data['confidence_score'] = float(confidence_score) / 100.0 if float(confidence_score) > 1 else float(confidence_score)
+        
+        resp = supabase.table('screenings').insert(screening_data).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if resp.status_code in [200, 201]:
+            return {'success': True, 'screening': resp.json()}, 201
+        return {'error': f'Failed to save screening: {resp.text[:200]}'}, 400
+    except Exception as e:
+                return {'error': str(e)}, 500
+
+@app.route('/api/doctors')
+@login_required
+def api_doctors():
+    """API endpoint to get doctors list (admin only)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        auth_token = session['user'].get('access_token')
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        
+        # Get doctors from doctors table first
+        doctors_resp = supabase.table('doctors').select('*').order('name', desc=False).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if doctors_resp.status_code != 200:
+            return {'doctors': []}
+        
+        doctors = doctors_resp.json()
+        
+        # Get user profiles for each doctor
+        doctors_data = []
+        for doctor in doctors:
+            # Get user profile for this doctor
+            user_profile_resp = supabase.table('user_profiles').select('email,role,position').eq('id', doctor.get('user_id')).execute(auth_token=SUPABASE_SERVICE_KEY)
+            
+            user_profile = {}
+            if user_profile_resp.status_code == 200 and user_profile_resp.json():
+                user_profile = user_profile_resp.json()[0]
+            
+            # Combine doctor and user profile data
+            # Use position from doctors table first, then fallback to user_profiles
+            position = doctor.get('position', user_profile.get('position', '-'))
+            role = user_profile.get('role', doctor.get('role', '-'))
+            
+            doctors_data.append({
+                'id': doctor.get('id'),
+                'name': doctor.get('name'),
+                'specialization': doctor.get('specialization'),
+                'position': position,
+                'role': role,
+                'email': user_profile.get('email', '-'),
+                'hospital_id': doctor.get('hospital_id', doctor.get('id', '-'))  # Use hospital_id field first
+            })
+        
+        return {'doctors': doctors_data}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/doctors/create', methods=['POST'])
+@login_required
+def api_create_doctor():
+    """API endpoint to create a new doctor account (admin only)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        if not data:
+            return {'error': 'No data received'}, 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        position = data.get('position', '').strip()
+        role = data.get('role', '').strip()
+        specialization = data.get('specialization', '').strip()
+        license_number = data.get('license_number', '').strip()
+        
+        if not name or not email or not password:
+            return {'error': 'Name, email, and password are required'}, 400
+        if len(password) < 6:
+            return {'error': 'Password must be at least 6 characters'}, 400
+        
+        # Create auth user via Supabase Admin API using service_role key
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        if not SUPABASE_SERVICE_KEY:
+            return {'error': 'Service role key not configured. Please add SUPABASE_SERVICE_KEY to your .env file.'}, 500
+        
+        auth_resp = supabase.client.post(
+            f"{supabase.url}/auth/v1/admin/users",
+            json={
+                'email': email,
+                'password': password,
+                'email_confirm': True,
+                'user_metadata': {
+                    'name': name,
+                    'role': 'doctor'
+                }
+            },
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json'
+            }
+        )
+        
+        if auth_resp.status_code not in [200, 201]:
+            error_text = auth_resp.text[:200]
+            if 'email_exists' in error_text:
+                return {'error': 'A user with this email address already exists'}, 400
+            return {'error': f'Failed to create auth user: {error_text}'}, 400
+        
+        auth_data = auth_resp.json()
+        user_id = auth_data.get('id')
+        
+        if not user_id:
+            return {'error': 'Failed to get user ID from auth response'}, 500
+        
+        # Create user profile using service_role key (bypass RLS)
+        profile_resp = supabase.client.post(
+            f"{supabase.url}/rest/v1/user_profiles",
+            json={
+                'id': user_id,
+                'email': email,
+                'role': 'doctor',
+                'name': name
+            },
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            }
+        )
+        
+        # Generate sequential 4-digit hospital_id
+        # First, get the current max hospital_id from existing doctors that have hospital_id not null
+        max_id_resp = supabase.client.get(
+            f"{supabase.url}/rest/v1/doctors?select=hospital_id&hospital_id=not.is.null&order=hospital_id.desc&limit=1",
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json'
+            }
+        )
+        
+        next_id = 0
+        if max_id_resp.status_code == 200:
+            existing_doctors = max_id_resp.json()
+            if existing_doctors and len(existing_doctors) > 0:
+                # Get the highest non-None hospital_id
+                for doctor in existing_doctors:
+                    hospital_id = doctor.get('hospital_id')
+                    if hospital_id is not None:
+                        try:
+                            last_id = int(hospital_id)
+                            next_id = last_id + 1
+                            break
+                        except (ValueError, TypeError):
+                            continue
+        
+        # Format as 4-digit string with leading zeros
+        hospital_id = f"{next_id:04d}"
+        
+        # Create doctor record (use user_id instead of id, no email column)
+        doctor_data = {'user_id': user_id, 'name': name, 'hospital_id': hospital_id}
+        if position:
+            doctor_data['position'] = position
+        if role:
+            doctor_data['role'] = role
+        if specialization:
+            doctor_data['specialization'] = specialization
+        if license_number:
+            doctor_data['license_number'] = license_number
+        
+        doctor_resp = supabase.client.post(
+            f"{supabase.url}/rest/v1/doctors",
+            json=doctor_data,
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            }
+        )
+        
+        return {'success': True, 'doctor_id': user_id}, 201
+    except Exception as e:
+                return {'error': str(e)}, 500
+
+@app.route('/api/patients/create', methods=['POST'])
+@login_required
+def api_create_patient():
+    """API endpoint to create a new patient record (admin only)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        date_of_birth = data.get('date_of_birth', '').strip()
+        contact_number = data.get('contact_number', '').strip()
+        emergency_contact = data.get('emergency_contact', '').strip()
+        identification_number = data.get('identification_number', '').strip()
+        occupation = data.get('occupation', '').strip()
+        ethnicity = data.get('ethnicity', '').strip()
+        assigned_doctor_id = data.get('doctor_id', '').strip()
+        
+        if not name or not date_of_birth or not contact_number or not emergency_contact or not identification_number:
+            return {'error': 'Patient name, date of birth, contact number, emergency contact, and identification number are required'}, 400
+        
+        # Generate sequential medical_id (similar to hospital_id)
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        max_id_resp = supabase.client.get(
+            f"{supabase.url}/rest/v1/patients?select=medical_id&medical_id=not.is.null&order=medical_id.desc&limit=1",
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json'
+            }
+        )
+        
+        next_id = 0
+        if max_id_resp.status_code == 200:
+            existing_patients = max_id_resp.json()
+            if existing_patients and len(existing_patients) > 0:
+                for patient in existing_patients:
+                    medical_id = patient.get('medical_id')
+                    if medical_id is not None:
+                        try:
+                            last_id = int(medical_id)
+                            next_id = last_id + 1
+                            break
+                        except (ValueError, TypeError):
+                            continue
+        
+        # Format as 6-digit medical ID
+        medical_id = f"{next_id:06d}"
+        
+        patient_data = {
+            'name': name, 
+            'medical_id': medical_id, 
+            'date_of_birth': date_of_birth,
+            'contact_number': contact_number,
+            'emergency_contact': emergency_contact,
+            'identification_number': identification_number
+        }
+        if occupation:
+            patient_data['occupation'] = occupation
+        if ethnicity:
+            patient_data['ethnicity'] = ethnicity
+        if assigned_doctor_id:
+            patient_data['assigned_doctor_id'] = assigned_doctor_id
+        
+        # Use service role key for admin operations (like doctor creation)
+        resp = supabase.client.post(
+            f"{supabase.url}/rest/v1/patients",
+            json=patient_data,
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        )
+        
+        if resp.status_code in [200, 201]:
+            return {'success': True, 'patient': resp.json()}, 201
+        return {'error': f'Failed to create patient: {resp.text[:200]}'}, 400
+    except Exception as e:
+                return {'error': str(e)}, 500
 
 @app.route('/portal')
+@app.route('/portal/<patient_id>')
 @login_required
 @rate_limit(max_requests=30, window_seconds=300)  # 30 requests per 5 minutes
-def portal():
-    """Serve working ensemble portal"""
+def portal(patient_id=None):
+    """Serve working ensemble portal, optionally with patient context"""
     try:
-        return render_template('working_ensemble.html')
+        return render_template('working_ensemble.html', patient_id=patient_id, user=session.get('user'))
     except:
         return "Portal file not found. Please ensure working_ensemble.html exists in templates folder.", 404
 
