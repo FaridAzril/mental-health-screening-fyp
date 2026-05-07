@@ -325,11 +325,19 @@
                     </div>
                     
                     <!-- Action Buttons -->
-                    <div class="grid grid-cols-2 gap-4 mt-6">
-                        <button id="export-pdf" class="healing-blue text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity">
-                            Export PDF Report
+                    <div class="grid grid-cols-3 gap-4 mt-6">
+                        <button id="save-results" class="bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition-colors font-semibold">
+                            Save Results
                         </button>
-                        <button id="new-assessment" class="professional-gray text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity">
+                        <button id="delete-results" class="bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 transition-colors font-semibold">
+                            Delete Results
+                        </button>
+                        <button id="export-pdf" class="healing-blue text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity font-semibold">
+                            Export PDF
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 mt-4">
+                        <button id="new-assessment" class="professional-gray text-white py-3 px-4 rounded-lg hover:opacity-90 transition-opacity font-semibold w-full">
                             New Assessment
                         </button>
                     </div>
@@ -402,6 +410,7 @@
         let isAnalyzing = false;
         let isWebcamOn = false;
         let isAssessmentActive = false;
+        let sessionLocked = false;
         let analysisInterval = null;
         let sessionStartTime = null;
         let sessionTimer = null;
@@ -861,27 +870,37 @@
             if (!isAssessmentActive) return;
             
             isAssessmentActive = false;
-            clearInterval(analysisInterval);
+            sessionLocked = true;
+            
+            // Stop continuous analysis and session timer
+            stopContinuousAnalysis();
+            
+            // Stop webcam
+            if (isWebcamOn) {
+                stopWebcam();
+            }
+            
+            // Process final results from collected session data
+            processFinalResults();
             
             // Show final results
             document.getElementById('live-results').style.display = 'none';
             document.getElementById('final-results').style.display = 'block';
             
-            // Update final charts with last data
-            updateFinalCharts();
+            // Hide start/stop buttons while session is locked
+            document.getElementById('start-assessment').style.display = 'none';
+            document.getElementById('stop-assessment').style.display = 'none';
             
-            updateStatus('Assessment completed successfully!', 'success');
-            
-            // Save screening results to database if patient_id is provided
-            if (patientId && patientId !== 'None' && patientId !== '') {
-                saveScreeningResults();
-            } else {
-                console.log('No session data to process');
-            }
+            updateStatus('Assessment completed - Please Save, Delete, or Export results before continuing', 'warning');
         }
 
         // New assessment - reset for another screening
         function newAssessment() {
+            if (sessionLocked) {
+                alert('Please Save, Delete, or Export your results before starting a new assessment.');
+                return;
+            }
+            
             // Reset displays
             document.getElementById('final-results').style.display = 'none';
             document.getElementById('live-results').style.display = 'block';
@@ -890,7 +909,13 @@
             document.getElementById('model1-result').textContent = '-';
             document.getElementById('model2-result').textContent = '-';
             document.getElementById('model3-result').textContent = '-';
+            document.getElementById('final-severity').textContent = '-';
+            document.getElementById('final-confidence').textContent = 'Model Confidence';
             document.getElementById('clinical-recommendation').textContent = 'Ready for new assessment session...';
+            
+            // Reset session data
+            sessionData = [];
+            sessionStartTime = null;
             
             // Reset charts
             if (probabilityChart) {
@@ -906,7 +931,23 @@
             document.getElementById('start-assessment').style.display = 'block';
             document.getElementById('stop-assessment').style.display = 'none';
             
+            // Reset save button state
+            const saveBtn = document.getElementById('save-results');
+            if (saveBtn) {
+                saveBtn.textContent = 'Save Results';
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('opacity-50');
+            }
+            
             updateStatus('Ready for new assessment', 'info');
+        }
+
+        // Unlock session after save/delete/export
+        function unlockSession() {
+            sessionLocked = false;
+            // Show start button for new assessment
+            document.getElementById('start-assessment').style.display = 'block';
+            document.getElementById('stop-assessment').style.display = 'none';
         }
 
         // Save screening results to database
@@ -917,8 +958,13 @@
                 const finalConfidence = document.getElementById('final-confidence')?.textContent;
                 const clinicalRecommendation = document.getElementById('clinical-recommendation')?.textContent;
                 
-                if (!finalSeverity) {
-                    console.error('No final severity found');
+                if (!finalSeverity || finalSeverity === '-') {
+                    alert('No screening results to save');
+                    return;
+                }
+                
+                if (!patientId || patientId === 'None' || patientId === '') {
+                    alert('No patient selected - cannot save results');
                     return;
                 }
                 
@@ -932,7 +978,7 @@
                 }
                 
                 const screeningDataToSave = {
-                    patient_id: parseInt(patientId),
+                    patient_id: patientId,
                     severity: finalSeverity.trim(),
                     confidence_score: confidenceScore,
                     notes: clinicalRecommendation || 'Screening completed via portal'
@@ -950,31 +996,54 @@
                 
                 const result = await response.json();
                 if (response.ok && result.success) {
-                    alert('Screening results saved successfully!');
-                    updateStatus('Results saved to database', 'success');
+                    updateStatus('Results saved to database successfully!', 'success');
+                    document.getElementById('save-results').textContent = 'Saved ✓';
+                    document.getElementById('save-results').disabled = true;
+                    document.getElementById('save-results').classList.add('opacity-50');
+                    unlockSession();
                 } else {
                     alert('Error saving results: ' + (result.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error saving results:', error);
-                alert('Error saving results. Please check console for details.');
+                updateStatus('Error saving screening results', 'error');
             }
         }
 
-        // Delete results function
-        async function deleteResults() {
-            if (!confirm('Are you sure you want to delete these screening results? This action cannot be undone.')) {
-                return;
-            }
-            
-            try {
-                // This would delete the current screening session results
-                // Implementation depends on how you want to handle deletion
-                alert('Delete functionality would remove current screening results from database (API implementation needed)');
-                updateStatus('Results deleted', 'info');
-            } catch (error) {
-                console.error('Error deleting results:', error);
-                alert('Error deleting results. Please check console for details.');
+        // Delete screening results (discard current session)
+        function deleteResults() {
+            if (confirm('Are you sure you want to discard these screening results? This action cannot be undone.')) {
+                // Reset displays
+                document.getElementById('final-results').style.display = 'none';
+                document.getElementById('live-results').style.display = 'block';
+                
+                // Reset model results
+                document.getElementById('model1-result').textContent = '-';
+                document.getElementById('model2-result').textContent = '-';
+                document.getElementById('model3-result').textContent = '-';
+                document.getElementById('final-severity').textContent = '-';
+                document.getElementById('clinical-recommendation').textContent = 'Ready for new assessment session...';
+                
+                // Reset charts
+                if (probabilityChart) {
+                    probabilityChart.data.datasets[0].data = [0, 0, 0];
+                    probabilityChart.update();
+                }
+                if (finalChart) {
+                    finalChart.data.datasets[0].data = [0, 0, 0];
+                    finalChart.update();
+                }
+                
+                // Reset save button state
+                const saveBtn = document.getElementById('save-results');
+                if (saveBtn) {
+                    saveBtn.textContent = 'Save Results';
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('opacity-50');
+                }
+                
+                unlockSession();
+                updateStatus('Results discarded - Ready for new assessment', 'info');
             }
         }
 
@@ -1530,15 +1599,38 @@
         // Event listeners - only add if elements exist
         const startBtn = document.getElementById('start-assessment');
         const stopBtn = document.getElementById('stop-assessment');
+        const saveBtn = document.getElementById('save-results');
+        const deleteBtn = document.getElementById('delete-results');
         const exportBtn = document.getElementById('export-pdf');
         const newAssessmentBtn = document.getElementById('new-assessment');
         const logoutBtn = document.getElementById('logout-btn');
         
         if (startBtn) startBtn.addEventListener('click', startAssessment);
         if (stopBtn) stopBtn.addEventListener('click', stopAssessment);
+        if (saveBtn) saveBtn.addEventListener('click', saveScreeningResults);
+        if (deleteBtn) deleteBtn.addEventListener('click', deleteResults);
         if (exportBtn) exportBtn.addEventListener('click', exportPDF);
         if (newAssessmentBtn) newAssessmentBtn.addEventListener('click', newAssessment);
         if (logoutBtn) logoutBtn.addEventListener('click', logout);
+        
+        // Prevent navigation when session is locked (unsaved results)
+        window.addEventListener('beforeunload', function(e) {
+            if (sessionLocked) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved screening results. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+        
+        // Block sidebar links when session is locked
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (sessionLocked) {
+                    e.preventDefault();
+                    alert('Please Save, Delete, or Export your screening results before navigating away.');
+                }
+            });
+        });
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {

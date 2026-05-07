@@ -607,18 +607,20 @@ def api_save_screening():
         user_id = session['user']['id']
         from supabase_client_working import SUPABASE_SERVICE_KEY
         
-        # Verify patient belongs to this doctor
+        # Verify patient belongs to this doctor and get doctor record ID
         doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
-        if doctor_resp.status_code == 200 and doctor_resp.json():
-            doctor_id = doctor_resp.json()[0]['id']
-            patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
-            if patient_resp.status_code == 200 and patient_resp.json():
-                if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
-                    return {'error': 'Unauthorized - not your patient'}, 403
+        if not (doctor_resp.status_code == 200 and doctor_resp.json()):
+            return {'error': 'Doctor record not found'}, 404
+        doctor_id = doctor_resp.json()[0]['id']
+        
+        patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
+        if patient_resp.status_code == 200 and patient_resp.json():
+            if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
+                return {'error': 'Unauthorized - not your patient'}, 403
         
         screening_data = {
             'patient_id': patient_id,
-            'doctor_id': user_id,
+            'doctor_id': doctor_id,
             'severity': severity,
             'notes': notes
         }
