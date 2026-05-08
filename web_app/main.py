@@ -11,6 +11,7 @@ import time
 import os
 import hashlib
 import secrets
+import json
 from functools import wraps
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
@@ -490,12 +491,19 @@ def api_screenings():
             return {'error': 'Not authenticated'}, 401
         auth_token = session['user'].get('access_token')
         role = session['user'].get('role', '')
+        from supabase_client_working import SUPABASE_SERVICE_KEY
         
         if role == 'admin':
-            resp = supabase.table('screenings').select('*').order('created_at', desc=True).execute(auth_token=auth_token)
+            resp = supabase.table('screenings').select('*, patients(name)').order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
         else:
+            # Get doctor record ID from doctors table
             user_id = session['user']['id']
-            resp = supabase.table('screenings').select('*').eq('doctor_id', user_id).order('created_at', desc=True).execute(auth_token=auth_token)
+            doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            if doctor_resp.status_code == 200 and doctor_resp.json():
+                doctor_id = doctor_resp.json()[0]['id']
+                resp = supabase.table('screenings').select('*, patients(name)').eq('doctor_id', doctor_id).order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
+            else:
+                return {'screenings': []}
         
         if resp.status_code == 200:
             return {'screenings': resp.json()}
@@ -531,7 +539,7 @@ def api_patient_detail(patient_id):
                     return {'error': 'Unauthorized - not your patient'}, 403
         
         # Get screening history for this patient
-        screenings_resp = supabase.table('screenings').select('*').eq('patient_id', patient_id).order('created_at', desc=True).execute(auth_token=auth_token)
+        screenings_resp = supabase.table('screenings').select('*').eq('patient_id', patient_id).order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
         screenings = screenings_resp.json() if screenings_resp.status_code == 200 else []
         
         patient['screenings'] = screenings
@@ -551,7 +559,7 @@ def api_patient_remarks(patient_id):
             return {'error': 'Unauthorized'}, 403
         
         data = request.get_json()
-        remarks = data.get('remarks', '').strip()
+        new_remark = data.get('remarks', '').strip()
         auth_token = session['user'].get('access_token')
         from supabase_client_working import SUPABASE_SERVICE_KEY
         
@@ -565,6 +573,18 @@ def api_patient_remarks(patient_id):
                 if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
                     return {'error': 'Unauthorized - not your patient'}, 403
         
+        # Get existing remarks to append
+        patient_data = supabase.table('patients').select('remarks').eq('id', patient_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        existing_remarks = ''
+        if patient_data.status_code == 200 and patient_data.json():
+            existing_remarks = patient_data.json()[0].get('remarks', '') or ''
+        
+        # Append new remark with newline separator (no date/time)
+        if existing_remarks:
+            updated_remarks = existing_remarks + '\n\n' + new_remark
+        else:
+            updated_remarks = new_remark
+        
         # Update remarks using direct REST API call
         update_resp = supabase.client.patch(
             f"{supabase.url}/rest/v1/patients?id=eq.{patient_id}",
@@ -574,10 +594,10 @@ def api_patient_remarks(patient_id):
                 'Content-Type': 'application/json',
                 'Prefer': 'return=representation'
             },
-            json={'remarks': remarks}
+            json={'remarks': updated_remarks}
         )
         if update_resp.status_code == 200:
-            return {'success': True, 'remarks': remarks}
+            return {'success': True, 'remarks': updated_remarks}
         else:
                         return {'error': f'Failed to update remarks: {update_resp.text[:200]}'}, 400
     except Exception as e:
@@ -594,11 +614,21 @@ def api_save_screening():
         if role != 'doctor':
             return {'error': 'Unauthorized - only doctors can save screenings'}, 403
         
+        # Debug: Check if request body is being received
+        print(f"DEBUG: Raw request data: {request.data}")
+        print(f"DEBUG: Request content type: {request.content_type}")
+        
         data = request.get_json()
+        print(f"DEBUG: Parsed JSON data: {data}")
+        
+        if not data:
+            return {'error': 'No data received in request'}, 400
+            
         patient_id = data.get('patient_id')
         severity = data.get('severity', '').strip()
         confidence_score = data.get('confidence_score')
         notes = data.get('notes', '').strip()
+        session_data = data.get('sessionData', [])  # Get session data from frontend
         
         if not patient_id or not severity:
             return {'error': 'Patient ID and severity are required'}, 400
@@ -618,21 +648,150 @@ def api_save_screening():
             if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
                 return {'error': 'Unauthorized - not your patient'}, 403
         
+        # Map severity string to integer for severity_level column
+        severity_map = {'Low': 1, 'Moderate': 2, 'High': 3}
+        severity_level = severity_map.get(severity, 2)  # Default to 2 (Moderate) if unknown
+        
         screening_data = {
             'patient_id': patient_id,
             'doctor_id': doctor_id,
             'severity': severity,
-            'notes': notes
+            'severity_level': severity_level,
+            'notes': notes,
+            'session_data': json.dumps(session_data) if session_data else None
         }
         if confidence_score is not None:
-            screening_data['confidence_score'] = float(confidence_score) / 100.0 if float(confidence_score) > 1 else float(confidence_score)
+            try:
+                conf_score = float(confidence_score)
+                if conf_score > 1:
+                    conf_score = conf_score / 100.0
+                screening_data['confidence_score'] = conf_score
+                print(f"DEBUG: Confidence score processed: {conf_score}")
+            except (ValueError, TypeError) as e:
+                print(f"DEBUG: Error processing confidence score: {e}")
+                pass
         
-        resp = supabase.table('screenings').insert(screening_data).execute(auth_token=SUPABASE_SERVICE_KEY)
-        if resp.status_code in [200, 201]:
-            return {'success': True, 'screening': resp.json()}, 201
-        return {'error': f'Failed to save screening: {resp.text[:200]}'}, 400
+        # Debug logging
+        print(f"DEBUG: Sending screening data: {screening_data}")
+        print(f"DEBUG: Patient ID: {patient_id} (type: {type(patient_id)})")
+        print(f"DEBUG: Doctor ID: {doctor_id} (type: {type(doctor_id)})")
+        print(f"DEBUG: Severity: {severity} (type: {type(severity)})")
+        
+        try:
+            resp = supabase.table('screenings').insert(screening_data).execute(auth_token=SUPABASE_SERVICE_KEY)
+            print(f"DEBUG: Supabase response status: {resp.status_code}")
+            print(f"DEBUG: Supabase response text: {resp.text[:200] if hasattr(resp, 'text') else str(resp)}")
+            
+            if resp.status_code in [200, 201]:
+                # Only try to parse JSON if there's actual content
+                if resp.text and resp.text.strip():
+                    return {'success': True, 'screening': resp.json()}, 201
+                else:
+                    # Successful insert but empty response (common for Supabase)
+                    return {'success': True, 'screening': screening_data}, 201
+            return {'error': f'Failed to save screening: {resp.text[:200]}'}, 400
+        except Exception as supabase_error:
+            print(f"DEBUG: Supabase exception: {supabase_error}")
+            print(f"DEBUG: Exception type: {type(supabase_error)}")
+            return {'error': f'Supabase error: {str(supabase_error)}'}, 500
     except Exception as e:
                 return {'error': str(e)}, 500
+
+@app.route('/api/schedule', methods=['POST'])
+@login_required
+def api_create_schedule():
+    """API endpoint to schedule a screening session"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        role = session['user'].get('role', '')
+        if role != 'doctor':
+            return {'error': 'Unauthorized - only doctors can schedule'}, 403
+        
+        data = request.get_json()
+        patient_id = data.get('patient_id')
+        scheduled_date = data.get('scheduled_date')
+        scheduled_time = data.get('scheduled_time', '09:00')
+        notes = data.get('notes', '').strip()
+        
+        if not patient_id or not scheduled_date:
+            return {'error': 'Patient ID and date are required'}, 400
+        
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        user_id = session['user']['id']
+        doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if not (doctor_resp.status_code == 200 and doctor_resp.json()):
+            return {'error': 'Doctor record not found'}, 404
+        doctor_id = doctor_resp.json()[0]['id']
+        
+        # Verify patient belongs to this doctor
+        auth_token = session['user'].get('access_token')
+        patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
+        if patient_resp.status_code == 200 and patient_resp.json():
+            if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
+                return {'error': 'Unauthorized - not your patient'}, 403
+        
+        schedule_data = {
+            'patient_id': patient_id,
+            'doctor_id': doctor_id,
+            'scheduled_date': scheduled_date,
+            'scheduled_time': scheduled_time,
+            'notes': notes,
+            'status': 'scheduled'
+        }
+        
+        resp = supabase.table('scheduled_screenings').insert(schedule_data).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if resp.status_code in [200, 201]:
+            if resp.text and resp.text.strip():
+                return {'success': True, 'schedule': resp.json()}, 201
+            else:
+                return {'success': True, 'schedule': schedule_data}, 201
+        return {'error': f'Failed to create schedule: {resp.text[:200]}'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/schedule', methods=['GET'])
+@login_required
+def api_get_schedule():
+    """API endpoint to get scheduled screenings"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        role = session['user'].get('role', '')
+        
+        if role == 'admin':
+            resp = supabase.table('scheduled_screenings').select('*, patients(name, medical_id)').order('scheduled_date', desc=False).execute(auth_token=SUPABASE_SERVICE_KEY)
+        else:
+            user_id = session['user']['id']
+            doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            if doctor_resp.status_code == 200 and doctor_resp.json():
+                doctor_id = doctor_resp.json()[0]['id']
+                resp = supabase.table('scheduled_screenings').select('*, patients(name, medical_id)').eq('doctor_id', doctor_id).order('scheduled_date', desc=False).execute(auth_token=SUPABASE_SERVICE_KEY)
+            else:
+                return {'schedules': []}
+        
+        if resp.status_code == 200:
+            return {'schedules': resp.json()}
+        return {'schedules': []}
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/schedule/<schedule_id>', methods=['DELETE'])
+@login_required
+def api_delete_schedule(schedule_id):
+    """API endpoint to delete a scheduled screening"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        
+        resp = supabase.table('scheduled_screenings').delete().eq('id', schedule_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if resp.status_code in [200, 204]:
+            return {'success': True}
+        return {'error': 'Failed to delete schedule'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
 
 @app.route('/api/doctors')
 @login_required

@@ -981,10 +981,12 @@
                     patient_id: patientId,
                     severity: finalSeverity.trim(),
                     confidence_score: confidenceScore,
-                    notes: clinicalRecommendation || 'Screening completed via portal'
+                    notes: clinicalRecommendation || 'Screening completed via portal',
+                    sessionData: sessionData  // Include session analysis data
                 };
                 
                 console.log('Saving screening results:', screeningDataToSave);
+                console.log('JSON string being sent:', JSON.stringify(screeningDataToSave));
                 
                 const response = await fetch('/api/screenings/save', {
                     method: 'POST',
@@ -994,15 +996,24 @@
                     body: JSON.stringify(screeningDataToSave)
                 });
                 
-                const result = await response.json();
-                if (response.ok && result.success) {
-                    updateStatus('Results saved to database successfully!', 'success');
-                    document.getElementById('save-results').textContent = 'Saved ✓';
-                    document.getElementById('save-results').disabled = true;
-                    document.getElementById('save-results').classList.add('opacity-50');
-                    unlockSession();
-                } else {
-                    alert('Error saving results: ' + (result.error || 'Unknown error'));
+                try {
+                    const result = await response.json();
+                    console.log('Save response:', result);
+                    
+                    if (response.ok && result.success) {
+                        updateStatus('Results saved to database successfully!', 'success');
+                        document.getElementById('save-results').textContent = 'Saved ✓';
+                        document.getElementById('save-results').disabled = true;
+                        document.getElementById('save-results').classList.add('opacity-50');
+                        unlockSession();
+                    } else {
+                        console.error('Save error response:', result);
+                        alert('Error saving results: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (parseError) {
+                    console.error('JSON parsing error:', parseError);
+                    console.error('Response text:', await response.text());
+                    alert('Error parsing server response. Please check console for details.');
                 }
             } catch (error) {
                 console.error('Error saving results:', error);
@@ -1187,7 +1198,7 @@
                             <div class="flex justify-between items-start">
                                 <div class="flex-1">
                                     <p class="text-sm text-gray-500">Current Remarks</p>
-                                    <p class="font-medium bg-gray-50 p-3 rounded">${patient.remarks || 'No remarks'}</p>
+                                    <p class="font-medium bg-gray-50 p-3 rounded whitespace-pre-wrap">${patient.remarks || 'No remarks'}</p>
                                 </div>
                                 <div class="flex space-x-2">
                                     <button onclick="viewRemarksHistory('${patient.id}')" class="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
@@ -1322,7 +1333,7 @@
                         
                         <div class="mb-6">
                             <h4 class="font-semibold text-gray-700 mb-2">Current Remarks</h4>
-                            <div class="bg-blue-50 p-3 rounded-lg">
+                            <div class="bg-blue-50 p-3 rounded-lg whitespace-pre-wrap">
                                 <p class="text-gray-700">${patient.remarks || 'No current remarks'}</p>
                                 <p class="text-xs text-gray-500 mt-1">Last updated: ${patient.updated_at ? new Date(patient.updated_at).toLocaleString() : 'Unknown'}</p>
                             </div>
@@ -1398,14 +1409,14 @@
                         
                         <div class="mb-4">
                             <h4 class="font-semibold text-gray-700 mb-2">Current Remarks</h4>
-                            <div id="current-remarks" class="bg-blue-50 p-3 rounded-lg min-h-[60px] text-gray-700">
+                            <div id="current-remarks" class="bg-blue-50 p-3 rounded-lg min-h-[60px] text-gray-700 whitespace-pre-wrap">
                                 ${patient.remarks || 'No remarks currently recorded.'}
                             </div>
                         </div>
                         
                         <div class="mb-4">
-                            <h4 class="font-semibold text-gray-700 mb-2">Edit Remarks</h4>
-                            <textarea id="new-remarks" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="4" placeholder="Enter patient remarks here...">${patient.remarks || ''}</textarea>
+                            <h4 class="font-semibold text-gray-700 mb-2">Add New Remark</h4>
+                            <textarea id="new-remarks" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="4" placeholder="Enter new remark here..."></textarea>
                         </div>
                         
                         <div class="flex justify-end space-x-3">
