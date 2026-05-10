@@ -506,7 +506,9 @@ def api_screenings():
                 return {'screenings': []}
         
         if resp.status_code == 200:
-            return {'screenings': resp.json()}
+            screenings = resp.json()
+            print(f"DEBUG: Screenings API response: {screenings[:2] if screenings else 'No screenings'}")  # Debug first 2 items
+            return {'screenings': screenings}
         return {'screenings': []}
     except Exception as e:
         return {'error': str(e)}, 500
@@ -583,7 +585,7 @@ def api_patient_remarks(patient_id):
         if existing_remarks:
             updated_remarks = existing_remarks + '\n\n' + new_remark
         else:
-            updated_remarks = new_remark
+            updated_remarks = '\n\n' + new_remark  # Add spacing for first remark too
         
         # Update remarks using direct REST API call
         update_resp = supabase.client.patch(

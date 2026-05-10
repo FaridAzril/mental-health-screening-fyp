@@ -376,6 +376,36 @@
                     </button>
                     <div id="screening-history-content" class="hidden">
                         <div class="p-6 border-t">
+                            <!-- Screening History Filters -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                                    <input type="text" id="screening-history-search" placeholder="Search by severity, notes..." 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                                    <select id="screening-history-date-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                        <option value="">All Time</option>
+                                        <option value="today">Today</option>
+                                        <option value="week">This Week</option>
+                                        <option value="month">This Month</option>
+                                        <option value="year">This Year</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                                    <select id="screening-history-severity-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                        <option value="">All Severities</option>
+                                        <option value="Low">Low</option>
+                                        <option value="Moderate">Moderate</option>
+                                        <option value="High">High</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex justify-end mb-4">
+                                <button onclick="clearScreeningHistoryFilters()" class="px-3 py-1 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Clear Filters</button>
+                            </div>
                             <div id="screening-history" class="space-y-3">
                                 <div class="flex items-center justify-center py-8">
                                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -1228,27 +1258,8 @@
                 
                 if (data.screenings) {
                     const patientScreenings = data.screenings.filter(s => s.patient_id === patientId);
-                    const historyContainer = document.getElementById('screening-history');
-                    
-                    if (patientScreenings.length > 0) {
-                        historyContainer.innerHTML = patientScreenings.map(screening => `
-                            <div class="border rounded-lg p-4 hover:bg-gray-50">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <p class="font-medium">Severity: <span class="severity-${screening.severity?.toLowerCase()} px-2 py-1 rounded text-white text-xs">${screening.severity || 'Unknown'}</span></p>
-                                        <p class="text-sm text-gray-500">Confidence: ${screening.confidence_score ? (screening.confidence_score * 100).toFixed(1) + '%' : 'N/A'}</p>
-                                        <p class="text-sm text-gray-500">Date: ${new Date(screening.created_at).toLocaleDateString()}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <button onclick="viewScreeningDetails('${screening.id}')" class="text-blue-500 hover:text-blue-700 text-sm">View Details</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                    } else {
-                        historyContainer.innerHTML = 
-                            '<p class="text-gray-500 text-center py-4">No screening history found for this patient</p>';
-                    }
+                    window.allPatientScreenings = patientScreenings; // Store globally for filtering
+                    displayScreeningHistory(patientScreenings);
                 }
             } catch (error) {
                 console.error('Error loading screening history:', error);
@@ -1257,9 +1268,178 @@
             }
         }
 
+        function displayScreeningHistory(screenings) {
+            const historyContainer = document.getElementById('screening-history');
+            
+            if (screenings.length > 0) {
+                historyContainer.innerHTML = screenings.map(screening => `
+                    <div class="border rounded-lg p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-medium">Severity: <span class="severity-${screening.severity?.toLowerCase()} px-2 py-1 rounded text-white text-xs">${screening.severity || 'Unknown'}</span></p>
+                                <p class="text-sm text-gray-500">Confidence: ${screening.confidence_score ? (screening.confidence_score * 100).toFixed(1) + '%' : 'N/A'}</p>
+                                <p class="text-sm text-gray-500">Date: ${new Date(screening.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div class="text-right">
+                                <button onclick="viewScreeningDetails('${screening.id}')" class="text-blue-500 hover:text-blue-700 text-sm">View Details</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                historyContainer.innerHTML = 
+                    '<p class="text-gray-500 text-center py-4">No screening history found for this patient</p>';
+            }
+        }
+
+        function applyScreeningHistoryFilters() {
+            if (!window.allPatientScreenings) return;
+            const searchTerm = document.getElementById('screening-history-search').value.toLowerCase();
+            const dateFilter = document.getElementById('screening-history-date-filter').value;
+            const severityFilter = document.getElementById('screening-history-severity-filter').value;
+            
+            let filtered = window.allPatientScreenings.filter(screening => {
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    (screening.severity && screening.severity.toLowerCase().includes(searchTerm)) ||
+                    (screening.notes && screening.notes.toLowerCase().includes(searchTerm));
+                
+                // Date filter
+                let dateMatch = true;
+                if (dateFilter && screening.created_at) {
+                    const screeningDate = new Date(screening.created_at);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    switch(dateFilter) {
+                        case 'today':
+                            dateMatch = screeningDate >= today;
+                            break;
+                        case 'week':
+                            const weekAgo = new Date(today);
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            dateMatch = screeningDate >= weekAgo;
+                            break;
+                        case 'month':
+                            const monthAgo = new Date(today);
+                            monthAgo.setMonth(monthAgo.getMonth() - 1);
+                            dateMatch = screeningDate >= monthAgo;
+                            break;
+                        case 'year':
+                            const yearAgo = new Date(today);
+                            yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                            dateMatch = screeningDate >= yearAgo;
+                            break;
+                    }
+                }
+                
+                // Severity filter
+                const severityMatch = !severityFilter || screening.severity === severityFilter;
+                
+                return searchMatch && dateMatch && severityMatch;
+            });
+            
+            displayScreeningHistory(filtered);
+        }
+
+        function clearScreeningHistoryFilters() {
+            document.getElementById('screening-history-search').value = '';
+            document.getElementById('screening-history-date-filter').value = '';
+            document.getElementById('screening-history-severity-filter').value = '';
+            displayScreeningHistory(window.allPatientScreenings || []);
+        }
+
         function viewScreeningDetails(screeningId) {
-            // This could open a modal with detailed screening information
-            alert(`Screening details for ID: ${screeningId} (Feature coming soon)`);
+            const screening = (window.allPatientScreenings || []).find(s => s.id === screeningId);
+            if (!screening) {
+                alert('Screening details not found');
+                return;
+            }
+            
+            // Parse session data if available
+            let sessionDataHtml = '';
+            if (screening.session_data) {
+                try {
+                    const sessionData = typeof screening.session_data === 'string' 
+                        ? JSON.parse(screening.session_data) 
+                        : screening.session_data;
+                    if (Array.isArray(sessionData) && sessionData.length > 0) {
+                        sessionDataHtml = `
+                            <div class="mt-4">
+                                <h4 class="font-semibold text-gray-700 mb-2">Session Analysis Data</h4>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs">
+                                        <thead>
+                                            <tr class="border-b text-left text-gray-500">
+                                                <th class="pb-2 font-medium">Time</th>
+                                                <th class="pb-2 font-medium">Low %</th>
+                                                <th class="pb-2 font-medium">Moderate %</th>
+                                                <th class="pb-2 font-medium">High %</th>
+                                                <th class="pb-2 font-medium">Severity</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${sessionData.map(point => `
+                                                <tr class="border-b">
+                                                    <td class="py-1">${point.timestamp ? new Date(point.timestamp).toLocaleTimeString() : '-'}</td>
+                                                    <td class="py-1">${point.low ? point.low.toFixed(1) : '-'}</td>
+                                                    <td class="py-1">${point.moderate ? point.moderate.toFixed(1) : '-'}</td>
+                                                    <td class="py-1">${point.high ? point.high.toFixed(1) : '-'}</td>
+                                                    <td class="py-1"><span class="severity-${(point.severity||'').toLowerCase()} px-1 py-0.5 rounded text-white text-xs">${point.severity || '-'}</span></td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>`;
+                    }
+                } catch(e) {
+                    console.error('Error parsing session data:', e);
+                }
+            }
+            
+            const sevColor = screening.severity === 'High' ? 'red' : screening.severity === 'Moderate' ? 'yellow' : 'green';
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-gray-900">Screening Details</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Date</p>
+                            <p class="font-medium">${new Date(screening.created_at).toLocaleString()}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Severity</p>
+                            <p class="font-medium"><span class="severity-${screening.severity?.toLowerCase()} px-2 py-1 rounded text-white text-xs">${screening.severity || 'Unknown'}</span></p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Confidence Score</p>
+                            <p class="font-medium">${screening.confidence_score ? (screening.confidence_score * 100).toFixed(1) + '%' : 'N/A'}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Severity Level</p>
+                            <p class="font-medium">${screening.severity_level || 'N/A'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-500">Notes</p>
+                        <p class="font-medium bg-gray-50 p-3 rounded-lg">${screening.notes || 'No notes available'}</p>
+                    </div>
+                    
+                    ${sessionDataHtml}
+                    
+                    <div class="flex justify-end mt-4">
+                        <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">Close</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
         }
 
         // Toggle functions for collapsible sections
@@ -1669,6 +1849,11 @@
                 loadPatientsForSelection();
                 setupPatientSearch();
             }
+
+            // Screening history filter event listeners
+            document.getElementById('screening-history-search')?.addEventListener('input', applyScreeningHistoryFilters);
+            document.getElementById('screening-history-date-filter')?.addEventListener('change', applyScreeningHistoryFilters);
+            document.getElementById('screening-history-severity-filter')?.addEventListener('change', applyScreeningHistoryFilters);
         });
 
         // Logout function
