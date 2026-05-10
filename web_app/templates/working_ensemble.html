@@ -44,6 +44,27 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
+            position: relative;
+        }
+        #face-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .face-label {
+            position: absolute;
+            top: -22px;
+            left: 0;
+            background: rgba(16, 185, 129, 0.85);
+            color: white;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
         }
         .severity-low { background: #10b981; }
         .severity-moderate { background: #f59e0b; }
@@ -172,6 +193,21 @@
                     <h2 class="text-xl font-bold text-gray-900 mb-2">AI-Driven Severity Screening</h2>
                     <p class="text-sm text-gray-600 mb-4">Advanced ensemble model for depression severity assessment</p>
                     
+                    <!-- Screening Mode Selection -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Screening Mode</label>
+                        <div class="flex rounded-lg overflow-hidden border border-gray-300">
+                            <button id="mode-live" onclick="setScreeningMode('live')" class="flex-1 py-2 px-4 text-sm font-medium bg-blue-500 text-white transition-colors">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                Live Session
+                            </button>
+                            <button id="mode-video" onclick="setScreeningMode('video')" class="flex-1 py-2 px-4 text-sm font-medium bg-white text-gray-600 hover:bg-gray-50 transition-colors border-l">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                Upload Video
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="grid grid-cols-2 gap-4">
                         <button id="start-assessment" class="healing-blue text-white font-semibold py-4 px-6 rounded-xl hover:opacity-90 transition-opacity duration-200 shadow-lg">
                             Start Assessment
@@ -187,9 +223,29 @@
                 <div class="bg-white rounded-2xl shadow-xl p-6">
                     <h3 class="text-xl font-semibold text-gray-900 mb-4">Real-time Analysis</h3>
                     
-                    <!-- Webcam Feed -->
-                    <div class="webcam-container mb-4" style="height: 400px;">
+                    <!-- Webcam Feed (Live Mode) -->
+                    <div id="webcam-section" class="webcam-container mb-4" style="height: 400px;">
                         <video id="webcam" class="w-full h-full object-cover" autoplay muted></video>
+                        <canvas id="face-overlay"></canvas>
+                    </div>
+
+                    <!-- Video Upload Section (Upload Mode) -->
+                    <div id="video-upload-section" class="hidden mb-4">
+                        <div id="video-drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors" style="min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            <p class="text-lg font-medium text-gray-700 mb-2">Drop a video file here or click to upload</p>
+                            <p class="text-sm text-gray-500 mb-4">Supports MP4, WebM, AVI, MOV (max 500MB)</p>
+                            <input type="file" id="video-file-input" accept="video/*" class="hidden">
+                            <button onclick="document.getElementById('video-file-input').click()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">Choose File</button>
+                        </div>
+                        <!-- Video Preview (shown after upload) -->
+                        <div id="video-preview-container" class="hidden rounded-xl overflow-hidden" style="height: 400px;">
+                            <video id="uploaded-video" class="w-full h-full object-cover" controls></video>
+                        </div>
+                        <div id="video-file-info" class="hidden mt-2 p-2 bg-gray-50 rounded-lg flex items-center justify-between">
+                            <span id="video-file-name" class="text-sm text-gray-700 truncate"></span>
+                            <button onclick="removeUploadedVideo()" class="text-red-500 hover:text-red-700 text-sm ml-2">Remove</button>
+                        </div>
                     </div>
                     
                     <!-- Session Status Display -->
@@ -432,6 +488,8 @@
     <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <script>
         // Global variables
         let webcamStream = null;
@@ -445,6 +503,9 @@
         let sessionStartTime = null;
         let sessionTimer = null;
         let sessionData = [];
+        let screeningMode = 'live'; // 'live' or 'video'
+        let uploadedVideoFile = null;
+        let videoAnalysisCanvas = null;
 
         // Initialize charts
         function initializeCharts() {
@@ -775,6 +836,12 @@
                 isWebcamOn = true;
                 updateStatus('Webcam Active', 'success');
                 
+                // Start face detection once video is playing
+                video.onloadedmetadata = () => {
+                    setupFaceOverlay();
+                    startFaceDetection();
+                };
+                
             } catch (error) {
                 console.error('Webcam error:', error);
                 updateStatus('Webcam Error: ' + error.message, 'error');
@@ -791,8 +858,353 @@
                 const video = document.getElementById('webcam');
                 video.srcObject = null;
                 
+                // Stop face detection and clear overlay
+                stopFaceDetection();
+                
                 updateStatus('Webcam Stopped', 'info');
             }
+        }
+
+        // ---- Face Detection Functions ----
+        let blazefaceModel = null;
+        let faceDetectionInterval = null;
+        let lastFaceRect = null; // For smooth tracking animation
+        let faceDetected = false; // Track if face is currently detected
+
+        function setupFaceOverlay() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('face-overlay');
+            if (!canvas || !video) return;
+            
+            // Match canvas size to video display size
+            const rect = video.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        async function startFaceDetection() {
+            if (faceDetectionInterval) return;
+            
+            // Load BlazeFace model if not already loaded
+            if (!blazefaceModel) {
+                try {
+                    updateStatus('Loading face detection model...', 'analyzing');
+                    blazefaceModel = await blazeface.load();
+                    console.log('BlazeFace model loaded successfully');
+                } catch(e) {
+                    console.error('BlazeFace load failed:', e);
+                    updateStatus('Face detection model failed to load', 'error');
+                    return;
+                }
+            }
+            
+            // Run detection every 150ms for smooth tracking
+            faceDetectionInterval = setInterval(detectFace, 150);
+        }
+
+        function stopFaceDetection() {
+            if (faceDetectionInterval) {
+                clearInterval(faceDetectionInterval);
+                faceDetectionInterval = null;
+            }
+            lastFaceRect = null;
+            faceDetected = false;
+            
+            // Clear the overlay
+            const canvas = document.getElementById('face-overlay');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        async function detectFace() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('face-overlay');
+            if (!video || !canvas || !isWebcamOn || video.readyState < 2 || !blazefaceModel) return;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Ensure canvas matches video display size
+            const videoRect = video.getBoundingClientRect();
+            if (canvas.width !== videoRect.width || canvas.height !== videoRect.height) {
+                canvas.width = videoRect.width;
+                canvas.height = videoRect.height;
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let detectedRect = null;
+            
+            try {
+                // Use BlazeFace to detect faces
+                const predictions = await blazefaceModel.estimateFaces(video, false);
+                
+                if (predictions.length > 0) {
+                    const face = predictions[0];
+                    // BlazeFace returns topLeft and bottomRight as [x, y] arrays
+                    const topLeft = face.topLeft;
+                    const bottomRight = face.bottomRight;
+                    
+                    // Scale from video resolution to canvas display size
+                    const scaleX = canvas.width / video.videoWidth;
+                    const scaleY = canvas.height / video.videoHeight;
+                    
+                    const rawX = topLeft[0] * scaleX;
+                    const rawY = topLeft[1] * scaleY;
+                    const rawW = (bottomRight[0] - topLeft[0]) * scaleX;
+                    const rawH = (bottomRight[1] - topLeft[1]) * scaleY;
+                    
+                    // Add padding around the detected face
+                    const padX = rawW * 0.15;
+                    const padY = rawH * 0.15;
+                    
+                    detectedRect = {
+                        x: Math.max(0, rawX - padX),
+                        y: Math.max(0, rawY - padY),
+                        width: Math.min(canvas.width - rawX + padX, rawW + padX * 2),
+                        height: Math.min(canvas.height - rawY + padY, rawH + padY * 2)
+                    };
+                    
+                    faceDetected = true;
+                } else {
+                    faceDetected = false;
+                }
+            } catch(e) {
+                // Detection can fail on some frames, just skip
+                faceDetected = false;
+            }
+            
+            if (!detectedRect && lastFaceRect) {
+                // Face lost — keep last known position but fade out
+                detectedRect = { ...lastFaceRect };
+            }
+            
+            if (!detectedRect) {
+                // No face detected and no previous position
+                return;
+            }
+            
+            // Smooth the tracking rectangle (lerp towards detected position)
+            if (lastFaceRect) {
+                const smooth = 0.4; // Smoothing factor — higher = more responsive
+                detectedRect.x = lastFaceRect.x + (detectedRect.x - lastFaceRect.x) * smooth;
+                detectedRect.y = lastFaceRect.y + (detectedRect.y - lastFaceRect.y) * smooth;
+                detectedRect.width = lastFaceRect.width + (detectedRect.width - lastFaceRect.width) * smooth;
+                detectedRect.height = lastFaceRect.height + (detectedRect.height - lastFaceRect.height) * smooth;
+            }
+            lastFaceRect = { ...detectedRect };
+            
+            // Draw the green face tracking box
+            drawFaceBox(ctx, detectedRect, faceDetected);
+        }
+
+        function drawFaceBox(ctx, rect, detected) {
+            const { x, y, width, height } = rect;
+            const cornerLen = Math.min(width, height) * 0.2;
+            const lineWidth = 3;
+            
+            // Color based on detection status
+            const greenR = 16, greenG = 185, greenB = 129;
+            const yellowR = 245, yellowG = 158, yellowB = 11;
+            const r = detected ? greenR : yellowR;
+            const g = detected ? greenG : yellowG;
+            const b = detected ? greenB : yellowB;
+            const mainColor = `rgb(${r}, ${g}, ${b})`;
+            
+            // Semi-transparent fill
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.08)`;
+            ctx.fillRect(x, y, width, height);
+            
+            // Border (thin)
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, width, height);
+            
+            // Thick corners
+            ctx.strokeStyle = mainColor;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            
+            // Top-left corner
+            ctx.beginPath();
+            ctx.moveTo(x, y + cornerLen);
+            ctx.lineTo(x, y);
+            ctx.lineTo(x + cornerLen, y);
+            ctx.stroke();
+            
+            // Top-right corner
+            ctx.beginPath();
+            ctx.moveTo(x + width - cornerLen, y);
+            ctx.lineTo(x + width, y);
+            ctx.lineTo(x + width, y + cornerLen);
+            ctx.stroke();
+            
+            // Bottom-left corner
+            ctx.beginPath();
+            ctx.moveTo(x, y + height - cornerLen);
+            ctx.lineTo(x, y + height);
+            ctx.lineTo(x + cornerLen, y + height);
+            ctx.stroke();
+            
+            // Bottom-right corner
+            ctx.beginPath();
+            ctx.moveTo(x + width - cornerLen, y + height);
+            ctx.lineTo(x + width, y + height);
+            ctx.lineTo(x + width, y + height - cornerLen);
+            ctx.stroke();
+            
+            // Label above the box
+            const labelText = detected ? 'Patient Face' : 'Face Lost';
+            ctx.font = '11px Inter, system-ui, sans-serif';
+            const textWidth = ctx.measureText(labelText).width;
+            
+            // Label background
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+            const labelPadX = 6;
+            const labelHeight = 16;
+            ctx.beginPath();
+            ctx.roundRect(x, y - labelHeight - 4, textWidth + labelPadX * 2, labelHeight + 3, 3);
+            ctx.fill();
+            
+            // Label text
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(labelText, x + labelPadX, y - 6);
+        }
+
+        // ---- Screening Mode Functions ----
+        function setScreeningMode(mode) {
+            screeningMode = mode;
+            const liveBtn = document.getElementById('mode-live');
+            const videoBtn = document.getElementById('mode-video');
+            const webcamSection = document.getElementById('webcam-section');
+            const videoUploadSection = document.getElementById('video-upload-section');
+            
+            if (mode === 'live') {
+                liveBtn.className = 'flex-1 py-2 px-4 text-sm font-medium bg-blue-500 text-white transition-colors';
+                videoBtn.className = 'flex-1 py-2 px-4 text-sm font-medium bg-white text-gray-600 hover:bg-gray-50 transition-colors border-l';
+                webcamSection.classList.remove('hidden');
+                videoUploadSection.classList.add('hidden');
+                document.getElementById('interval-info').textContent = '3 seconds';
+            } else {
+                videoBtn.className = 'flex-1 py-2 px-4 text-sm font-medium bg-blue-500 text-white transition-colors border-l';
+                liveBtn.className = 'flex-1 py-2 px-4 text-sm font-medium bg-white text-gray-600 hover:bg-gray-50 transition-colors';
+                webcamSection.classList.add('hidden');
+                videoUploadSection.classList.remove('hidden');
+                document.getElementById('interval-info').textContent = 'Per frame (video)';
+            }
+        }
+
+        function handleVideoFileSelect(file) {
+            if (!file || !file.type.startsWith('video/')) {
+                alert('Please select a valid video file (MP4, WebM, AVI, MOV)');
+                return;
+            }
+            if (file.size > 500 * 1024 * 1024) {
+                alert('File size exceeds 500MB limit');
+                return;
+            }
+            
+            uploadedVideoFile = file;
+            const videoUrl = URL.createObjectURL(file);
+            const previewVideo = document.getElementById('uploaded-video');
+            previewVideo.src = videoUrl;
+            
+            document.getElementById('video-drop-zone').classList.add('hidden');
+            document.getElementById('video-preview-container').classList.remove('hidden');
+            document.getElementById('video-file-info').classList.remove('hidden');
+            document.getElementById('video-file-name').textContent = file.name + ' (' + (file.size / (1024 * 1024)).toFixed(1) + ' MB)';
+            
+            updateStatus('Video loaded: ' + file.name, 'success');
+        }
+
+        function removeUploadedVideo() {
+            uploadedVideoFile = null;
+            const previewVideo = document.getElementById('uploaded-video');
+            if (previewVideo.src) {
+                URL.revokeObjectURL(previewVideo.src);
+                previewVideo.src = '';
+            }
+            document.getElementById('video-drop-zone').classList.remove('hidden');
+            document.getElementById('video-preview-container').classList.add('hidden');
+            document.getElementById('video-file-info').classList.add('hidden');
+            document.getElementById('video-file-input').value = '';
+            updateStatus('Video removed', 'info');
+        }
+
+        // Analyze uploaded video frame by frame
+        async function analyzeUploadedVideo() {
+            if (!uploadedVideoFile) {
+                alert('Please upload a video first');
+                return;
+            }
+            
+            const video = document.getElementById('uploaded-video');
+            video.pause();
+            video.controls = false;
+            
+            // Create canvas for frame extraction
+            if (!videoAnalysisCanvas) {
+                videoAnalysisCanvas = document.createElement('canvas');
+            }
+            const canvas = videoAnalysisCanvas;
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            
+            const duration = video.duration;
+            const frameInterval = 3; // Analyze every 3 seconds of video
+            const totalFrames = Math.floor(duration / frameInterval);
+            
+            if (totalFrames === 0) {
+                alert('Video is too short for analysis (minimum 3 seconds)');
+                video.controls = true;
+                return;
+            }
+            
+            updateStatus(`Analyzing video: ${totalFrames} frames to process...`, 'analyzing');
+            
+            // Reset session data for video analysis
+            sessionData = [];
+            let currentFrame = 0;
+            
+            for (let t = 0; t < duration; t += frameInterval) {
+                video.currentTime = t;
+                
+                // Wait for seeked event
+                await new Promise(resolve => {
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        resolve();
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                    // Timeout fallback
+                    setTimeout(resolve, 1000);
+                });
+                
+                // Small delay to ensure frame is rendered
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Draw frame to canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Run ensemble analysis on this frame
+                simulateEnsembleAnalysis();
+                
+                currentFrame++;
+                updateStatus(`Analyzing video: frame ${currentFrame}/${totalFrames}...`, 'analyzing');
+                
+                // Update session time display
+                const minutes = Math.floor(t / 60);
+                const seconds = Math.floor(t % 60);
+                document.getElementById('session-time').textContent = 
+                    minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+            }
+            
+            // Video analysis complete
+            video.controls = true;
+            updateStatus('Video analysis complete', 'success');
         }
 
         // Start continuous analysis
@@ -875,24 +1287,53 @@
 
         // Start assessment
         async function startAssessment() {
-            updateStatus('Initializing assessment...', 'analyzing');
-            
-            // Start webcam automatically
-            if (!isWebcamOn) {
-                await startWebcam();
+            if (screeningMode === 'video') {
+                // Video upload mode
+                if (!uploadedVideoFile) {
+                    alert('Please upload a video file first');
+                    return;
+                }
+                
+                updateStatus('Initializing video analysis...', 'analyzing');
+                isAssessmentActive = true;
+                
+                document.getElementById('start-assessment').style.display = 'none';
+                document.getElementById('stop-assessment').style.display = 'block';
+                
+                // Hide mode selection during analysis
+                document.getElementById('mode-live').disabled = true;
+                document.getElementById('mode-video').disabled = true;
+                
+                // Run video analysis (this is async and will process all frames)
+                await analyzeUploadedVideo();
+                
+                // After video analysis completes, auto-stop and process results
+                stopAssessment();
+            } else {
+                // Live webcam mode
+                updateStatus('Initializing assessment...', 'analyzing');
+                
+                // Start webcam automatically
+                if (!isWebcamOn) {
+                    await startWebcam();
+                }
+                
+                // Mark assessment as active
+                isAssessmentActive = true;
+                
+                // Update UI
+                document.getElementById('start-assessment').style.display = 'none';
+                document.getElementById('stop-assessment').style.display = 'block';
+                
+                // Hide mode selection during analysis
+                document.getElementById('mode-live').disabled = true;
+                document.getElementById('mode-video').disabled = true;
+                
+                // Start continuous analysis
+                startContinuousAnalysis();
+                
+                updateStatus('Continuous monitoring active', 'success');
             }
-            
-            // Mark assessment as active
-            isAssessmentActive = true;
-            
-            // Update UI
-            document.getElementById('start-assessment').style.display = 'none';
-            document.getElementById('stop-assessment').style.display = 'block';
-            
-            // Start continuous analysis
-            startContinuousAnalysis();
-            
-            updateStatus('Continuous monitoring active', 'success');
         }
 
         // Stop assessment
@@ -905,9 +1346,15 @@
             // Stop continuous analysis and session timer
             stopContinuousAnalysis();
             
-            // Stop webcam
+            // Stop webcam (only in live mode)
             if (isWebcamOn) {
                 stopWebcam();
+            }
+            
+            // Re-enable video controls if in video mode
+            if (screeningMode === 'video') {
+                const video = document.getElementById('uploaded-video');
+                if (video) video.controls = true;
             }
             
             // Process final results from collected session data
@@ -961,6 +1408,10 @@
             document.getElementById('start-assessment').style.display = 'block';
             document.getElementById('stop-assessment').style.display = 'none';
             
+            // Re-enable mode selection buttons
+            document.getElementById('mode-live').disabled = false;
+            document.getElementById('mode-video').disabled = false;
+            
             // Reset save button state
             const saveBtn = document.getElementById('save-results');
             if (saveBtn) {
@@ -978,6 +1429,9 @@
             // Show start button for new assessment
             document.getElementById('start-assessment').style.display = 'block';
             document.getElementById('stop-assessment').style.display = 'none';
+            // Re-enable mode selection buttons
+            document.getElementById('mode-live').disabled = false;
+            document.getElementById('mode-video').disabled = false;
         }
 
         // Save screening results to database
@@ -1804,12 +2258,58 @@
         if (newAssessmentBtn) newAssessmentBtn.addEventListener('click', newAssessment);
         if (logoutBtn) logoutBtn.addEventListener('click', logout);
         
+        // Video file input event listeners
+        const videoFileInput = document.getElementById('video-file-input');
+        if (videoFileInput) {
+            videoFileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    handleVideoFileSelect(e.target.files[0]);
+                }
+            });
+        }
+        
+        // Video drag and drop
+        const videoDropZone = document.getElementById('video-drop-zone');
+        if (videoDropZone) {
+            videoDropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.add('border-blue-400', 'bg-blue-50');
+            });
+            videoDropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('border-blue-400', 'bg-blue-50');
+            });
+            videoDropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.remove('border-blue-400', 'bg-blue-50');
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleVideoFileSelect(e.dataTransfer.files[0]);
+                }
+            });
+            videoDropZone.addEventListener('click', function(e) {
+                // Only trigger file input if clicking the zone itself, not the button
+                if (e.target.tagName !== 'BUTTON') {
+                    document.getElementById('video-file-input').click();
+                }
+            });
+        }
+        
         // Prevent navigation when session is locked (unsaved results)
         window.addEventListener('beforeunload', function(e) {
             if (sessionLocked) {
                 e.preventDefault();
                 e.returnValue = 'You have unsaved screening results. Are you sure you want to leave?';
                 return e.returnValue;
+            }
+        });
+        
+        // Resize face overlay canvas when window resizes
+        window.addEventListener('resize', function() {
+            if (isWebcamOn) {
+                setupFaceOverlay();
             }
         });
         

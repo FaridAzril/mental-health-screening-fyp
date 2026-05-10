@@ -507,7 +507,6 @@ def api_screenings():
         
         if resp.status_code == 200:
             screenings = resp.json()
-            print(f"DEBUG: Screenings API response: {screenings[:2] if screenings else 'No screenings'}")  # Debug first 2 items
             return {'screenings': screenings}
         return {'screenings': []}
     except Exception as e:
