@@ -15,7 +15,8 @@
         .card-hover { transition: all 0.3s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
         .sidebar-link { transition: all 0.2s ease; }
-        .sidebar-link:hover, .sidebar-link.active { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .sidebar-link:hover { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .sidebar-link.active { background-color: #dbeafe; color: #2563eb; border-left: 4px solid #2563eb; }
         .severity-high { background: #fef2f2; border-left: 4px solid #ef4444; }
         .severity-moderate { background: #fffbeb; border-left: 4px solid #f59e0b; }
         .severity-low { background: #f0fdf4; border-left: 4px solid #22c55e; }
@@ -29,25 +30,21 @@
             <p class="text-xs text-gray-500">Screening System</p>
         </div>
         <nav class="flex-1 p-4 space-y-1">
-            <a href="#" onclick="showTab('dashboard')" class="sidebar-link active flex items-center px-4 py-3 rounded-lg text-sm">
+            <a href="#" onclick="showTab('dashboard')" data-tab="dashboard" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
                 Dashboard
             </a>
-            <a href="/portal" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="/portal" data-tab="portal" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Screening Portal
             </a>
-            <a href="#" onclick="showTab('patients')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="#" onclick="showTab('patients')" data-tab="patients" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 My Patients
             </a>
-            <a href="#" onclick="showTab('screenings')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="#" onclick="showTab('screenings')" data-tab="screenings" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 My Screenings
-            </a>
-            <a href="#" onclick="showTab('schedule')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                Schedule
             </a>
         </nav>
         <div class="p-4 border-t">
@@ -248,64 +245,7 @@
                 </div>
             </div>
 
-            <!-- Schedule Tab -->
-            <div id="tab-schedule" class="hidden">
-                <div class="bg-white rounded-xl shadow-lg p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Scheduled Screenings</h3>
-                        <div class="flex space-x-3">
-                            <button id="add-schedule-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">+ Schedule New</button>
-                            <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50">Back to Dashboard</button>
-                        </div>
-                    </div>
-
-                    <!-- Add Schedule Form (hidden by default) -->
-                    <div id="schedule-form" class="hidden mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <h4 class="font-semibold text-gray-700 mb-3">Schedule a Screening Session</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                                <select id="schedule-patient" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
-                                    <option value="">Select Patient</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                <input type="date" id="schedule-date" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                                <input type="time" id="schedule-time" class="w-full p-2 border border-gray-300 rounded-lg text-sm" value="09:00">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                <input type="text" id="schedule-notes" class="w-full p-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes...">
-                            </div>
-                        </div>
-                        <div class="flex justify-end space-x-3 mt-4">
-                            <button id="cancel-schedule-btn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">Cancel</button>
-                            <button id="save-schedule-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">Save Schedule</button>
-                        </div>
-                    </div>
-
-                    <!-- Upcoming Sessions -->
-                    <div class="mb-6">
-                        <h4 class="font-semibold text-gray-700 mb-3">Upcoming Sessions</h4>
-                        <div id="upcoming-sessions" class="space-y-3">
-                            <p class="text-center text-gray-400 py-4">Loading scheduled sessions...</p>
-                        </div>
-                    </div>
-
-                    <!-- Past Sessions -->
-                    <div>
-                        <h4 class="font-semibold text-gray-700 mb-3">Past Scheduled Sessions</h4>
-                        <div id="past-sessions" class="space-y-3">
-                            <p class="text-center text-gray-400 py-4">Loading past sessions...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+                    </main>
     </div>
 
     <script>
@@ -339,7 +279,7 @@
 
         function showTab(tab) {
             // Hide all tabs
-            ['tab-dashboard','tab-patients','tab-screenings','tab-schedule'].forEach(id => {
+            ['tab-dashboard','tab-patients','tab-screenings'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             // Show selected tab
@@ -347,24 +287,15 @@
 
             // Update sidebar navigation highlighting
             document.querySelectorAll('.sidebar-link').forEach(link => {
-                link.classList.remove('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
-                link.classList.add('text-gray-600');
+                link.classList.remove('active');
+                if (link.dataset.tab === tab) {
+                    link.classList.add('active');
+                }
             });
-
-            // Add active state to selected tab
-            const tabNames = { 'dashboard': 'Dashboard', 'patients': 'My Patients', 'screenings': 'My Screenings', 'schedule': 'Schedule' };
-            const activeLink = Array.from(document.querySelectorAll('.sidebar-link')).find(link =>
-                link.textContent.trim() === tabNames[tab]
-            );
-            if (activeLink) {
-                activeLink.classList.remove('text-gray-600');
-                activeLink.classList.add('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
-            }
 
             // Load data for specific tabs
             if (tab === 'patients') loadPatients();
             if (tab === 'screenings') loadScreenings();
-            if (tab === 'schedule') loadSchedule();
         }
 
         async function loadPatients() {
@@ -771,158 +702,26 @@
         console.log('startScreening:', typeof window.startScreening);
         console.log('editRemarks:', typeof window.editRemarks);
 
-        // Handle hash-based tab switching from sidebar links
+        // Handle hash-based tab switching and initial sidebar highlight
         const hash = window.location.hash.substring(1);
-        if (hash && ['patients', 'screenings', 'dashboard', 'schedule'].includes(hash)) {
+        if (hash && ['patients', 'screenings', 'dashboard'].includes(hash)) {
             showTab(hash);
+        } else {
+            showTab('dashboard');
         }
-
-        // ---- Scheduling Functions ----
-        async function loadSchedule() {
-            try {
-                const resp = await fetch('/api/schedule');
-                const data = await resp.json();
-                const schedules = data.schedules || [];
-                
-                const now = new Date();
-                const today = now.toISOString().split('T')[0];
-                
-                const upcoming = schedules.filter(s => s.scheduled_date >= today && s.status === 'scheduled');
-                const past = schedules.filter(s => s.scheduled_date < today || s.status !== 'scheduled');
-                
-                const upcomingDiv = document.getElementById('upcoming-sessions');
-                const pastDiv = document.getElementById('past-sessions');
-                
-                if (upcoming.length > 0) {
-                    upcomingDiv.innerHTML = upcoming.map(s => {
-                        const patientName = s.patients?.name || 'Unknown';
-                        const patientMedId = s.patients?.medical_id || '-';
-                        const isToday = s.scheduled_date === today;
-                        const borderColor = isToday ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white';
-                        return `<div class="border-l-4 ${borderColor} p-4 rounded-r-lg shadow-sm">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="font-semibold text-gray-900">${patientName} <span class="text-xs text-gray-500">(${patientMedId})</span></p>
-                                    <p class="text-sm text-gray-600">${isToday ? '<span class="text-blue-600 font-semibold">TODAY</span> - ' : ''}${new Date(s.scheduled_date + 'T' + (s.scheduled_time || '09:00')).toLocaleString()}</p>
-                                    ${s.notes ? `<p class="text-sm text-gray-500 mt-1">${s.notes}</p>` : ''}
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button onclick="window.startScreening('${s.patient_id}')" class="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600">Start Screening</button>
-                                    <button onclick="deleteSchedule('${s.id}')" class="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600">Cancel</button>
-                                </div>
-                            </div>
-                        </div>`;
-                    }).join('');
-                } else {
-                    upcomingDiv.innerHTML = '<p class="text-center text-gray-400 py-4">No upcoming scheduled sessions</p>';
-                }
-                
-                if (past.length > 0) {
-                    pastDiv.innerHTML = past.map(s => {
-                        const patientName = s.patients?.name || 'Unknown';
-                        const statusBadge = s.status === 'completed' ? '<span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">Completed</span>' : '<span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">Cancelled</span>';
-                        return `<div class="border-l-4 border-gray-300 p-4 rounded-r-lg bg-gray-50 opacity-75">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="font-semibold text-gray-700">${patientName}</p>
-                                    <p class="text-sm text-gray-500">${new Date(s.scheduled_date + 'T' + (s.scheduled_time || '09:00')).toLocaleString()}</p>
-                                    ${s.notes ? `<p class="text-sm text-gray-400 mt-1">${s.notes}</p>` : ''}
-                                </div>
-                                ${statusBadge}
-                            </div>
-                        </div>`;
-                    }).join('');
-                } else {
-                    pastDiv.innerHTML = '<p class="text-center text-gray-400 py-4">No past scheduled sessions</p>';
-                }
-                
-                // Load patients for the schedule form dropdown
-                loadPatientsForSchedule();
-            } catch(e) {
-                console.error('Error loading schedule:', e);
-                document.getElementById('upcoming-sessions').innerHTML = '<p class="text-red-500 text-center py-4">Error loading schedule</p>';
-            }
-        }
-
-        async function loadPatientsForSchedule() {
-            try {
-                const resp = await fetch('/api/patients');
-                const data = await resp.json();
-                const patients = data.patients || [];
-                const select = document.getElementById('schedule-patient');
-                if (select) {
-                    select.innerHTML = '<option value="">Select Patient</option>' + patients.map(p => 
-                        `<option value="${p.id}">${p.name} (${p.medical_id || '-'})</option>`
-                    ).join('');
-                }
-            } catch(e) {
-                console.error('Error loading patients for schedule:', e);
-            }
-        }
-
-        async function saveSchedule() {
-            const patientId = document.getElementById('schedule-patient').value;
-            const date = document.getElementById('schedule-date').value;
-            const time = document.getElementById('schedule-time').value;
-            const notes = document.getElementById('schedule-notes').value;
-            
-            if (!patientId || !date) {
-                alert('Please select a patient and date');
-                return;
-            }
-            
-            try {
-                const resp = await fetch('/api/schedule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ patient_id: patientId, scheduled_date: date, scheduled_time: time, notes: notes })
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    alert('Screening session scheduled successfully!');
-                    document.getElementById('schedule-form').classList.add('hidden');
-                    loadSchedule();
-                } else {
-                    alert('Error: ' + (data.error || 'Failed to schedule'));
-                }
-            } catch(e) {
-                console.error('Error saving schedule:', e);
-                alert('Error saving schedule');
-            }
-        }
-
-        async function deleteSchedule(scheduleId) {
-            if (!confirm('Are you sure you want to cancel this scheduled session?')) return;
-            try {
-                const resp = await fetch(`/api/schedule/${scheduleId}`, { method: 'DELETE' });
-                const data = await resp.json();
-                if (data.success) {
-                    loadSchedule();
-                } else {
-                    alert('Error: ' + (data.error || 'Failed to cancel'));
-                }
-            } catch(e) {
-                console.error('Error deleting schedule:', e);
-                alert('Error cancelling schedule');
-            }
-        }
-
-        // Schedule form event listeners
-        document.getElementById('add-schedule-btn')?.addEventListener('click', () => {
-            document.getElementById('schedule-form').classList.remove('hidden');
-            // Set min date to today
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('schedule-date').min = today;
-        });
-        document.getElementById('cancel-schedule-btn')?.addEventListener('click', () => {
-            document.getElementById('schedule-form').classList.add('hidden');
-        });
-        document.getElementById('save-schedule-btn')?.addEventListener('click', saveSchedule);
 
         // Screenings filter event listeners
         document.getElementById('screenings-search')?.addEventListener('input', applyScreeningsFilters);
         document.getElementById('screenings-date-filter')?.addEventListener('change', applyScreeningsFilters);
         document.getElementById('screenings-severity-filter')?.addEventListener('change', applyScreeningsFilters);
+        
+        // Listen for hash changes to update sidebar active state
+        window.addEventListener('hashchange', function() {
+            const h = window.location.hash.substring(1);
+            if (h && ['patients', 'screenings', 'dashboard'].includes(h)) {
+                showTab(h);
+            }
+        });
     </script>
 </body>
 </html>

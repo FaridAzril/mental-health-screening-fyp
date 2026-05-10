@@ -91,12 +91,12 @@ def is_session_valid():
     if 'user' not in session:
         return False
     
-    # Check if session is older than 24 hours
+    # Check if session is older than 8 hours
     last_activity = session.get('last_activity', 0)
     current_time = time.time()
     
-    # 24 hours = 86400 seconds
-    if current_time - last_activity > 86400:
+    # 8 hours = 28800 seconds
+    if current_time - last_activity > 28800:
         return False
     
     return True
@@ -698,101 +698,6 @@ def api_save_screening():
     except Exception as e:
                 return {'error': str(e)}, 500
 
-@app.route('/api/schedule', methods=['POST'])
-@login_required
-def api_create_schedule():
-    """API endpoint to schedule a screening session"""
-    try:
-        if 'user' not in session:
-            return {'error': 'Not authenticated'}, 401
-        role = session['user'].get('role', '')
-        if role != 'doctor':
-            return {'error': 'Unauthorized - only doctors can schedule'}, 403
-        
-        data = request.get_json()
-        patient_id = data.get('patient_id')
-        scheduled_date = data.get('scheduled_date')
-        scheduled_time = data.get('scheduled_time', '09:00')
-        notes = data.get('notes', '').strip()
-        
-        if not patient_id or not scheduled_date:
-            return {'error': 'Patient ID and date are required'}, 400
-        
-        from supabase_client_working import SUPABASE_SERVICE_KEY
-        user_id = session['user']['id']
-        doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
-        if not (doctor_resp.status_code == 200 and doctor_resp.json()):
-            return {'error': 'Doctor record not found'}, 404
-        doctor_id = doctor_resp.json()[0]['id']
-        
-        # Verify patient belongs to this doctor
-        auth_token = session['user'].get('access_token')
-        patient_resp = supabase.table('patients').select('assigned_doctor_id').eq('id', patient_id).execute(auth_token=auth_token)
-        if patient_resp.status_code == 200 and patient_resp.json():
-            if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
-                return {'error': 'Unauthorized - not your patient'}, 403
-        
-        schedule_data = {
-            'patient_id': patient_id,
-            'doctor_id': doctor_id,
-            'scheduled_date': scheduled_date,
-            'scheduled_time': scheduled_time,
-            'notes': notes,
-            'status': 'scheduled'
-        }
-        
-        resp = supabase.table('scheduled_screenings').insert(schedule_data).execute(auth_token=SUPABASE_SERVICE_KEY)
-        if resp.status_code in [200, 201]:
-            if resp.text and resp.text.strip():
-                return {'success': True, 'schedule': resp.json()}, 201
-            else:
-                return {'success': True, 'schedule': schedule_data}, 201
-        return {'error': f'Failed to create schedule: {resp.text[:200]}'}, 400
-    except Exception as e:
-        return {'error': str(e)}, 500
-
-@app.route('/api/schedule', methods=['GET'])
-@login_required
-def api_get_schedule():
-    """API endpoint to get scheduled screenings"""
-    try:
-        if 'user' not in session:
-            return {'error': 'Not authenticated'}, 401
-        from supabase_client_working import SUPABASE_SERVICE_KEY
-        role = session['user'].get('role', '')
-        
-        if role == 'admin':
-            resp = supabase.table('scheduled_screenings').select('*, patients(name, medical_id)').order('scheduled_date', desc=False).execute(auth_token=SUPABASE_SERVICE_KEY)
-        else:
-            user_id = session['user']['id']
-            doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
-            if doctor_resp.status_code == 200 and doctor_resp.json():
-                doctor_id = doctor_resp.json()[0]['id']
-                resp = supabase.table('scheduled_screenings').select('*, patients(name, medical_id)').eq('doctor_id', doctor_id).order('scheduled_date', desc=False).execute(auth_token=SUPABASE_SERVICE_KEY)
-            else:
-                return {'schedules': []}
-        
-        if resp.status_code == 200:
-            return {'schedules': resp.json()}
-        return {'schedules': []}
-    except Exception as e:
-        return {'error': str(e)}, 500
-
-@app.route('/api/schedule/<schedule_id>', methods=['DELETE'])
-@login_required
-def api_delete_schedule(schedule_id):
-    """API endpoint to delete a scheduled screening"""
-    try:
-        if 'user' not in session:
-            return {'error': 'Not authenticated'}, 401
-        from supabase_client_working import SUPABASE_SERVICE_KEY
-        
-        resp = supabase.table('scheduled_screenings').delete().eq('id', schedule_id).execute(auth_token=SUPABASE_SERVICE_KEY)
-        if resp.status_code in [200, 204]:
-            return {'success': True}
-        return {'error': 'Failed to delete schedule'}, 400
-    except Exception as e:
-        return {'error': str(e)}, 500
 
 @app.route('/api/doctors')
 @login_required

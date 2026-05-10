@@ -15,7 +15,8 @@
         .card-hover { transition: all 0.3s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
         .sidebar-link { transition: all 0.2s ease; }
-        .sidebar-link:hover, .sidebar-link.active { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .sidebar-link:hover { background: rgba(59,130,246,0.1); color: #2563eb; }
+        .sidebar-link.active { background: rgba(59,130,246,0.1); color: #2563eb; border-left: 4px solid #3b82f6; }
         .severity-high { background: #fef2f2; border-left: 4px solid #ef4444; }
         .severity-moderate { background: #fffbeb; border-left: 4px solid #f59e0b; }
         .severity-low { background: #f0fdf4; border-left: 4px solid #22c55e; }
@@ -30,19 +31,19 @@
             <p class="text-xs text-gray-500">Screening System</p>
         </div>
         <nav class="flex-1 p-4 space-y-1">
-            <a href="#" onclick="showTab('dashboard')" class="sidebar-link active flex items-center px-4 py-3 rounded-lg text-sm">
+            <a href="#" onclick="showTab('dashboard')" data-tab="dashboard" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
                 Dashboard
             </a>
-            <a href="#" onclick="showTab('patients')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="#" onclick="showTab('patients')" data-tab="patients" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 Patients
             </a>
-            <a href="#" onclick="showTab('doctors')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="#" onclick="showTab('doctors')" data-tab="doctors" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Doctors
             </a>
-            <a href="#" onclick="showTab('screenings')" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+            <a href="#" onclick="showTab('screenings')" data-tab="screenings" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Screenings
             </a>
@@ -437,19 +438,11 @@
             
             // Update sidebar navigation highlighting
             document.querySelectorAll('.sidebar-link').forEach(link => {
-                link.classList.remove('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
-                link.classList.add('text-gray-600');
+                link.classList.remove('active');
+                if (link.dataset.tab === tab) {
+                    link.classList.add('active');
+                }
             });
-            
-            // Add active state to selected tab
-            const activeLink = Array.from(document.querySelectorAll('.sidebar-link')).find(link => 
-                link.textContent.trim().toLowerCase() === tab.toLowerCase() ||
-                (tab === 'dashboard' && link.textContent.trim().toLowerCase() === 'dashboard')
-            );
-            if (activeLink) {
-                activeLink.classList.remove('text-gray-600');
-                activeLink.classList.add('active', 'bg-blue-50', 'text-blue-600', 'border-l-4', 'border-blue-500');
-            }
             
             // Load data for specific tabs
             if (tab === 'patients') loadPatients();
@@ -817,6 +810,7 @@
         function editDoctor(id) { alert('Edit doctor: ' + id + ' (coming soon)'); }
 
         document.addEventListener('DOMContentLoaded', function() {
+            showTab('dashboard');
             updateBars();
             
             // Add event listeners for admin screenings filters
