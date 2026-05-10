@@ -69,11 +69,25 @@
         .severity-low { background: #10b981; }
         .severity-moderate { background: #f59e0b; }
         .severity-high { background: #ef4444; }
+        
+        /* Responsive styles for fixed sidebar */
+        @media (max-width: 768px) {
+            aside {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            aside.open {
+                transform: translateX(0);
+            }
+            header, main {
+                margin-left: 0 !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen flex">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white shadow-lg flex flex-col min-h-screen">
+    <aside class="w-64 bg-white shadow-lg flex flex-col fixed left-0 top-0 h-screen z-40">
         <div class="p-6 border-b">
             <h1 class="text-lg font-bold text-gray-900">Mental Health</h1>
             <p class="text-xs text-gray-500">Screening System</p>
@@ -95,6 +109,10 @@
             <a href="/dashboard#screenings" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 My Screenings
+            </a>
+            <a href="/dashboard#schedule" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                My Schedule
             </a>
             {% elif user and user.role == 'admin' %}
             <a href="/dashboard#patients" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
@@ -127,7 +145,7 @@
     <!-- Main Content -->
     <div class="flex-1 flex flex-col">
         <!-- Top Header -->
-        <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+        <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center ml-64">
             <div>
                 <h2 class="text-xl font-bold text-gray-900">Health Screening System</h2>
                 <p class="text-sm text-gray-500">AI-Driven Severity Assessment - Ensemble Models</p>
@@ -150,7 +168,7 @@
         </header>
 
         <!-- Content Area -->
-        <main class="flex-1 p-6 overflow-auto">
+        <main class="flex-1 p-6 overflow-auto ml-64">
         
         <!-- Patient Selection Interface (shown when no patient ID) -->
         {% if not patient_id %}
