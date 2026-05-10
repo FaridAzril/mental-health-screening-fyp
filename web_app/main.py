@@ -393,8 +393,8 @@ def get_dashboard_stats(role, auth_token=None, user_id=None):
         
         # For admins, get all data
         elif role == 'admin':
-            # Get all screenings
-            screenings_resp = supabase.table('screenings').select('id,severity,created_at').execute(auth_token=auth_token)
+            # Get all screenings with patient and doctor names
+            screenings_resp = supabase.table('screenings').select('id,severity,created_at,patients!inner(name),doctors!inner(name)').execute(auth_token=auth_token)
             if screenings_resp.status_code == 200:
                 screenings = screenings_resp.json()
                 stats['total_screenings'] = len(screenings)
@@ -494,14 +494,14 @@ def api_screenings():
         from supabase_client_working import SUPABASE_SERVICE_KEY
         
         if role == 'admin':
-            resp = supabase.table('screenings').select('*, patients(name)').order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
+            resp = supabase.table('screenings').select('*, patients!inner(name), doctors!inner(name)').order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
         else:
             # Get doctor record ID from doctors table
             user_id = session['user']['id']
             doctor_resp = supabase.table('doctors').select('id').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
             if doctor_resp.status_code == 200 and doctor_resp.json():
                 doctor_id = doctor_resp.json()[0]['id']
-                resp = supabase.table('screenings').select('*, patients(name)').eq('doctor_id', doctor_id).order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
+                resp = supabase.table('screenings').select('*, patients!inner(name)').eq('doctor_id', doctor_id).order('created_at', desc=True).execute(auth_token=SUPABASE_SERVICE_KEY)
             else:
                 return {'screenings': []}
         

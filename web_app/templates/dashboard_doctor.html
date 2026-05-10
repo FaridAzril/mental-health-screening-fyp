@@ -478,7 +478,6 @@
             try {
                 const resp = await fetch('/api/screenings');
                 const data = await resp.json();
-                console.log('DEBUG: Screenings API response:', data);
                 window.allDoctorScreenings = data.screenings || []; // Store globally for filtering
                 displayScreenings(window.allDoctorScreenings);
             } catch(e) { console.error('Error loading screenings:', e); }
@@ -491,8 +490,17 @@
                 empty.classList.add('hidden');
                 tbody.innerHTML = screenings.map(s => {
                     const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
-                    const patientName = s.patient_name || s.patients?.name || s.name || 'Unknown Patient';
-                    return `<tr class="border-b ${sevClass}"><td class="py-3">${patientName}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.notes || '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                    const patientName = s.patients?.name || s.patient_name || s.name || 'Unknown Patient';
+                    const doctorName = s.doctors?.name || 'Unknown Doctor';
+                    
+                    // Check if doctors object exists to determine if this is admin view
+                    const isAdminView = s.doctors && Object.keys(s.doctors).length > 0;
+                    
+                    if (isAdminView) {
+                        return `<tr class="border-b ${sevClass}"><td class="py-3">${patientName}</td><td class="py-3">${doctorName}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.notes || '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                    } else {
+                        return `<tr class="border-b ${sevClass}"><td class="py-3">${patientName}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.notes || '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                    }
                 }).join('');
             } else { empty.classList.remove('hidden'); tbody.innerHTML = ''; }
         }

@@ -247,6 +247,37 @@
                         <h3 class="text-lg font-semibold text-gray-900">All Screenings</h3>
                         <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
                     </div>
+
+                    <!-- Screening Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                            <input type="text" id="admin-screenings-search" placeholder="Search by patient, doctor, notes..." 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                            <select id="admin-screenings-date-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                <option value="">All Time</option>
+                                <option value="today">Today</option>
+                                <option value="week">This Week</option>
+                                <option value="month">This Month</option>
+                                <option value="year">This Year</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                            <select id="admin-screenings-severity-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                <option value="">All Severities</option>
+                                <option value="Low">Low</option>
+                                <option value="Moderate">Moderate</option>
+                                <option value="High">High</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="clearAdminScreeningsFilters()" class="w-full px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">Clear Filters</button>
+                        </div>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
@@ -637,16 +668,78 @@
             try {
                 const resp = await fetch('/api/screenings');
                 const data = await resp.json();
-                const tbody = document.getElementById('screenings-table');
-                const empty = document.getElementById('screenings-empty');
-                if (data.screenings && data.screenings.length > 0) {
-                    empty.classList.add('hidden');
-                    tbody.innerHTML = data.screenings.map(s => {
-                        const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
-                        return `<tr class="border-b ${sevClass}"><td class="py-3">${s.patient_id || '-'}</td><td class="py-3">${s.doctor_id || '-'}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
-                    }).join('');
-                } else { empty.classList.remove('hidden'); tbody.innerHTML = ''; }
+                window.allAdminScreenings = data.screenings || []; // Store globally for filtering
+                displayAdminScreenings(window.allAdminScreenings);
             } catch(e) { console.error('Error loading screenings:', e); }
+        }
+
+        function displayAdminScreenings(screenings) {
+            const tbody = document.getElementById('screenings-table');
+            const empty = document.getElementById('screenings-empty');
+            if (screenings && screenings.length > 0) {
+                empty.classList.add('hidden');
+                tbody.innerHTML = screenings.map(s => {
+                    const sevClass = (s.severity||'').toLowerCase() === 'high' ? 'severity-high' : (s.severity||'').toLowerCase() === 'moderate' ? 'severity-moderate' : 'severity-low';
+                    const patientName = s.patients?.name || s.patient_name || 'Unknown Patient';
+                    const doctorName = s.doctors?.name || 'Unknown Doctor';
+                    return `<tr class="border-b ${sevClass}"><td class="py-3">${patientName}</td><td class="py-3">${doctorName}</td><td class="py-3 font-semibold">${s.severity || '-'}</td><td class="py-3">${s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-'}</td><td class="py-3">${(s.created_at || '').substring(0,10)}</td></tr>`;
+                }).join('');
+            } else { empty.classList.remove('hidden'); tbody.innerHTML = ''; }
+        }
+
+        function applyAdminScreeningsFilters() {
+            if (!window.allAdminScreenings) return;
+            const searchTerm = document.getElementById('admin-screenings-search').value.toLowerCase();
+            const dateFilter = document.getElementById('admin-screenings-date-filter').value;
+            const severityFilter = document.getElementById('admin-screenings-severity-filter').value;
+            
+            const filtered = window.allAdminScreenings.filter(s => {
+                // Search filter
+                const patientName = s.patients?.name || s.patient_name || 'Unknown Patient';
+                const doctorName = s.doctors?.name || 'Unknown Doctor';
+                const searchMatch = !searchTerm || 
+                    patientName.toLowerCase().includes(searchTerm) ||
+                    doctorName.toLowerCase().includes(searchTerm) ||
+                    (s.notes && s.notes.toLowerCase().includes(searchTerm));
+                
+                // Date filter
+                let dateMatch = true;
+                if (dateFilter) {
+                    const screeningDate = new Date(s.created_at);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    if (dateFilter === 'today') {
+                        dateMatch = screeningDate >= today;
+                    } else if (dateFilter === 'week') {
+                        const weekAgo = new Date(today);
+                        weekAgo.setDate(weekAgo.getDate() - 7);
+                        dateMatch = screeningDate >= weekAgo;
+                    } else if (dateFilter === 'month') {
+                        const monthAgo = new Date(today);
+                        monthAgo.setMonth(monthAgo.getMonth() - 1);
+                        dateMatch = screeningDate >= monthAgo;
+                    } else if (dateFilter === 'year') {
+                        const yearAgo = new Date(today);
+                        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                        dateMatch = screeningDate >= yearAgo;
+                    }
+                }
+                
+                // Severity filter
+                const severityMatch = !severityFilter || s.severity === severityFilter;
+                
+                return searchMatch && dateMatch && severityMatch;
+            });
+            
+            displayAdminScreenings(filtered);
+        }
+
+        function clearAdminScreeningsFilters() {
+            document.getElementById('admin-screenings-search').value = '';
+            document.getElementById('admin-screenings-date-filter').value = '';
+            document.getElementById('admin-screenings-severity-filter').value = '';
+            displayAdminScreenings(window.allAdminScreenings);
         }
 
         // --- Form Submissions ---
@@ -709,6 +802,7 @@
         const statsData = {{ stats | tojson }};
         
         function updateBars() {
+            if (!statsData) return; // Prevent error if statsData is null
             const total = statsData.total_screenings || 1;
             const highCount = statsData.high_risk_count || 0;
             const moderateCount = statsData.moderate_risk_count || 0;
@@ -722,7 +816,18 @@
         function editPatient(id) { alert('Edit patient: ' + id + ' (coming soon)'); }
         function editDoctor(id) { alert('Edit doctor: ' + id + ' (coming soon)'); }
 
-        document.addEventListener('DOMContentLoaded', updateBars);
+        document.addEventListener('DOMContentLoaded', function() {
+            updateBars();
+            
+            // Add event listeners for admin screenings filters
+            const searchInput = document.getElementById('admin-screenings-search');
+            const dateFilter = document.getElementById('admin-screenings-date-filter');
+            const severityFilter = document.getElementById('admin-screenings-severity-filter');
+            
+            if (searchInput) searchInput.addEventListener('input', applyAdminScreeningsFilters);
+            if (dateFilter) dateFilter.addEventListener('change', applyAdminScreeningsFilters);
+            if (severityFilter) severityFilter.addEventListener('change', applyAdminScreeningsFilters);
+        });
     </script>
 </body>
 </html>
