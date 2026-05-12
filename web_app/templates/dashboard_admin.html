@@ -60,6 +60,10 @@
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 Analytics
             </a>
+            <a href="#" onclick="showTab('audit')" data-tab="audit" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Audit Log
+            </a>
         </nav>
         <div class="p-4 border-t">
             <div class="flex items-center">
@@ -558,6 +562,74 @@
                     <canvas id="chart-confidence" height="120"></canvas>
                 </div>
             </div>
+
+            <!-- Audit & Activity Log Tab -->
+            <div id="tab-audit" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Audit & Activity Log</h3>
+                            <p class="text-sm text-gray-500">Track all system events, logins, and admin actions</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="loadAuditLog()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium">Refresh</button>
+                            <button onclick="exportAuditCSV()" class="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">Export CSV</button>
+                            <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Search</label>
+                            <input type="text" id="audit-search" placeholder="Search events..." oninput="filterAuditLog()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Event Type</label>
+                            <select id="audit-type-filter" onchange="filterAuditLog()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">All Events</option>
+                                <option value="SUCCESSFUL_LOGIN">Login</option>
+                                <option value="FAILED_LOGIN">Failed Login</option>
+                                <option value="LOGOUT">Logout</option>
+                                <option value="DOCTOR_CREATED">Doctor Created</option>
+                                <option value="DOCTOR_UPDATED">Doctor Updated</option>
+                                <option value="DOCTOR_STATUS_CHANGED">Doctor Status Changed</option>
+                                <option value="PATIENT_CREATED">Patient Created</option>
+                                <option value="PATIENT_REASSIGNED">Patient Reassigned</option>
+                                <option value="BRUTE_FORCE_BLOCK">Brute Force Block</option>
+                                <option value="SUSPICIOUS">Suspicious Activity</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                            <input type="date" id="audit-date-filter" onchange="filterAuditLog()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Summary badges -->
+                    <div id="audit-summary" class="flex flex-wrap gap-2 mb-4"></div>
+
+                    <!-- Log table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 border-b">
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table-body" class="text-gray-700"></tbody>
+                        </table>
+                        <p id="audit-empty" class="text-center text-gray-400 py-8 hidden">No audit log entries found</p>
+                    </div>
+                    <div class="flex justify-between items-center mt-4 text-sm text-gray-500">
+                        <p id="audit-count">0 events</p>
+                        <p>Showing last 1000 events (in-memory)</p>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -743,7 +815,7 @@
         // --- Tab Navigation ---
         function showTab(tab) {
             // Hide all tabs
-            ['tab-dashboard','tab-patients','tab-doctors','tab-screenings','tab-system','tab-reports','tab-analytics'].forEach(id => {
+            ['tab-dashboard','tab-patients','tab-doctors','tab-screenings','tab-system','tab-reports','tab-analytics','tab-audit'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             // Show selected tab
@@ -764,6 +836,7 @@
             if (tab === 'system') loadSystemManagement();
             if (tab === 'reports') loadReportsTab();
             if (tab === 'analytics') loadAnalytics();
+            if (tab === 'audit') loadAuditLog();
         }
 
         // --- Modals ---
@@ -1693,6 +1766,115 @@
                 });
 
             } catch(e) { console.error('Error loading analytics:', e); }
+        }
+
+        // --- Audit & Activity Log ---
+        window._auditLogs = [];
+
+        const AUDIT_EVENT_STYLES = {
+            'SUCCESSFUL_LOGIN':     { color: 'bg-green-100 text-green-800', label: 'Login' },
+            'FAILED_LOGIN':         { color: 'bg-red-100 text-red-800', label: 'Failed Login' },
+            'LOGOUT':               { color: 'bg-gray-100 text-gray-800', label: 'Logout' },
+            'DOCTOR_CREATED':       { color: 'bg-blue-100 text-blue-800', label: 'Doctor Created' },
+            'DOCTOR_UPDATED':       { color: 'bg-indigo-100 text-indigo-800', label: 'Doctor Updated' },
+            'DOCTOR_STATUS_CHANGED':{ color: 'bg-yellow-100 text-yellow-800', label: 'Status Changed' },
+            'PATIENT_CREATED':      { color: 'bg-teal-100 text-teal-800', label: 'Patient Created' },
+            'PATIENT_REASSIGNED':   { color: 'bg-purple-100 text-purple-800', label: 'Patient Reassigned' },
+            'BRUTE_FORCE_BLOCK':    { color: 'bg-red-200 text-red-900', label: 'Brute Force Block' },
+            'CSRF_FAILURE':         { color: 'bg-orange-100 text-orange-800', label: 'CSRF Failure' },
+            'SUSPICIOUS_USER_AGENT':{ color: 'bg-orange-100 text-orange-800', label: 'Suspicious UA' },
+            'SUSPICIOUS_FILE_ACCESS':{ color: 'bg-orange-100 text-orange-800', label: 'Suspicious File' },
+            'INVALID_INPUT':        { color: 'bg-yellow-100 text-yellow-800', label: 'Invalid Input' }
+        };
+
+        async function loadAuditLog() {
+            try {
+                const resp = await fetch('/api/audit-log');
+                const data = await resp.json();
+                window._auditLogs = data.logs || [];
+                filterAuditLog();
+            } catch(e) { console.error('Error loading audit log:', e); }
+        }
+
+        function filterAuditLog() {
+            const search = (document.getElementById('audit-search').value || '').toLowerCase();
+            const typeFilter = document.getElementById('audit-type-filter').value;
+            const dateFilter = document.getElementById('audit-date-filter').value;
+
+            let filtered = window._auditLogs.filter(log => {
+                if (typeFilter) {
+                    if (typeFilter === 'SUSPICIOUS') {
+                        if (!log.type.includes('SUSPICIOUS')) return false;
+                    } else if (log.type !== typeFilter) return false;
+                }
+                if (dateFilter && log.timestamp) {
+                    if (log.timestamp.substring(0, 10) !== dateFilter) return false;
+                }
+                if (search) {
+                    const text = `${log.type} ${log.ip} ${log.details}`.toLowerCase();
+                    if (!text.includes(search)) return false;
+                }
+                return true;
+            });
+
+            // Summary badges
+            const typeCounts = {};
+            filtered.forEach(log => {
+                typeCounts[log.type] = (typeCounts[log.type] || 0) + 1;
+            });
+            const summaryEl = document.getElementById('audit-summary');
+            summaryEl.innerHTML = Object.entries(typeCounts).map(([type, count]) => {
+                const style = AUDIT_EVENT_STYLES[type] || { color: 'bg-gray-100 text-gray-700', label: type };
+                return `<span class="px-2 py-1 rounded-full text-xs font-medium ${style.color}">${style.label}: ${count}</span>`;
+            }).join('');
+
+            // Table
+            const tbody = document.getElementById('audit-table-body');
+            const empty = document.getElementById('audit-empty');
+            document.getElementById('audit-count').textContent = `${filtered.length} event${filtered.length !== 1 ? 's' : ''}`;
+
+            if (filtered.length > 0) {
+                empty.classList.add('hidden');
+                tbody.innerHTML = filtered.map(log => {
+                    const style = AUDIT_EVENT_STYLES[log.type] || { color: 'bg-gray-100 text-gray-700', label: log.type };
+                    const ts = log.timestamp ? new Date(log.timestamp).toLocaleString() : '-';
+                    return `<tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-3 text-xs whitespace-nowrap">${ts}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${style.color}">${style.label}</span></td>
+                        <td class="px-4 py-3 text-xs font-mono">${log.ip || '-'}</td>
+                        <td class="px-4 py-3 text-xs">${log.details || '-'}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                empty.classList.remove('hidden');
+                tbody.innerHTML = '';
+            }
+        }
+
+        function exportAuditCSV() {
+            const data = window._auditLogs;
+            if (!data || data.length === 0) {
+                alert('No audit log data to export.');
+                return;
+            }
+            const headers = ['Timestamp', 'Event Type', 'IP Address', 'Details'];
+            const rows = data.map(log => [
+                (log.timestamp || '').replace(/,/g, ' '),
+                log.type || '',
+                log.ip || '',
+                (log.details || '').replace(/,/g, ' ').replace(/\n/g, ' ')
+            ]);
+            let csv = headers.join(',') + '\n';
+            rows.forEach(row => { csv += row.join(',') + '\n'; });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `audit_log_${new Date().toISOString().substring(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
 
         document.addEventListener('DOMContentLoaded', function() {

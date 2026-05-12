@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -45,6 +46,18 @@
             <a href="#" onclick="showTab('screenings')" data-tab="screenings" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 My Screenings
+            </a>
+            <a href="#" onclick="showTab('analytics')" data-tab="analytics" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Analytics
+            </a>
+            <a href="#" onclick="showTab('notes')" data-tab="notes" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Notes & History
+            </a>
+            <a href="#" onclick="showTab('profile')" data-tab="profile" class="sidebar-link flex items-center px-4 py-3 rounded-lg text-sm text-gray-600">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                My Profile
             </a>
         </nav>
         <div class="p-4 border-t">
@@ -157,14 +170,6 @@
                                     <option value="year">This Year</option>
                                 </select>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Has Remarks</label>
-                                <select id="doctor-patient-remarks-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">All Patients</option>
-                                    <option value="has">Has Remarks</option>
-                                    <option value="no">No Remarks</option>
-                                </select>
-                            </div>
                         </div>
                         <div class="mt-3 flex justify-end">
                             <button onclick="applyDoctorPatientFilters()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 mr-2">Apply Filters</button>
@@ -245,7 +250,147 @@
                 </div>
             </div>
 
-                    </main>
+            <!-- Analytics Tab -->
+            <div id="tab-analytics" class="hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Patient Analytics</h3>
+                        <p class="text-sm text-gray-500">Visual overview of your screening activity</p>
+                    </div>
+                    <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white rounded-xl shadow p-5">
+                        <p class="text-xs text-gray-500 uppercase font-medium">My Screenings</p>
+                        <p id="doc-analytics-total" class="text-3xl font-bold text-gray-900 mt-1">-</p>
+                        <p id="doc-analytics-trend" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-5">
+                        <p class="text-xs text-gray-500 uppercase font-medium">My Patients</p>
+                        <p id="doc-analytics-patients" class="text-3xl font-bold text-blue-600 mt-1">-</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow p-5">
+                        <p class="text-xs text-gray-500 uppercase font-medium">High Risk</p>
+                        <p id="doc-analytics-high" class="text-3xl font-bold text-red-600 mt-1">-</p>
+                        <p id="doc-analytics-high-pct" class="text-xs text-red-400 mt-1"></p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Screening Trend (Last 30 Days)</h4>
+                        <canvas id="doc-chart-trend" height="200"></canvas>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Severity Distribution</h4>
+                        <canvas id="doc-chart-severity" height="200"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-4">Screenings Per Patient</h4>
+                    <canvas id="doc-chart-per-patient" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- Notes & History Tab -->
+            <div id="tab-notes" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Patient Notes & Screening History</h3>
+                            <p class="text-sm text-gray-500">Timeline of all screenings with clinical notes</p>
+                        </div>
+                        <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Select Patient</label>
+                            <select id="notes-patient-select" onchange="loadPatientTimeline()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Select a patient --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Filter Severity</label>
+                            <select id="notes-severity-filter" onchange="loadPatientTimeline()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">All</option>
+                                <option value="Low">Low</option>
+                                <option value="Moderate">Moderate</option>
+                                <option value="High">High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Patient summary card -->
+                    <div id="notes-patient-summary" class="hidden mb-4 p-4 bg-blue-50 rounded-lg">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div><span class="text-gray-500">Name:</span> <strong id="notes-p-name">-</strong></div>
+                            <div><span class="text-gray-500">Medical ID:</span> <strong id="notes-p-mid">-</strong></div>
+                            <div><span class="text-gray-500">Contact:</span> <strong id="notes-p-contact">-</strong></div>
+                            <div><span class="text-gray-500">Remarks:</span> <strong id="notes-p-remarks">-</strong></div>
+                        </div>
+                    </div>
+                    <!-- Timeline -->
+                    <div id="notes-timeline" class="space-y-4">
+                        <p class="text-center text-gray-400 py-8">Select a patient to view their screening timeline</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Profile Tab -->
+            <div id="tab-profile" class="hidden">
+                <div class="max-w-2xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">My Profile</h3>
+                            <p class="text-sm text-gray-500">Your account details (managed by admin)</p>
+                        </div>
+                        <button onclick="showTab('dashboard')" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg border border-gray-300">Back</button>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                        <div class="flex items-center mb-6">
+                            <div class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-white text-2xl font-bold" id="profile-avatar">D</div>
+                            <div class="ml-4">
+                                <h4 id="profile-display-name" class="text-xl font-bold text-gray-900">{{ user.name }}</h4>
+                                <p id="profile-display-email" class="text-sm text-gray-500">{{ user.email }}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Full Name</label>
+                                    <p id="profile-name" class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900">{{ user.name }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Position</label>
+                                    <p id="profile-position" class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900">-</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Specialization</label>
+                                    <p id="profile-specialization" class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900">-</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">License Number</label>
+                                    <p id="profile-license" class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900">-</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Email</label>
+                                <p class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900">{{ user.email }}</p>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">To update your profile information, please contact your administrator.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Account Information</h4>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between py-2 border-b"><span class="text-gray-500">Role</span><span class="font-medium text-gray-900">Doctor</span></div>
+                            <div class="flex justify-between py-2 border-b"><span class="text-gray-500">Hospital ID</span><span id="profile-hospital-id" class="font-medium text-gray-900">-</span></div>
+                            <div class="flex justify-between py-2"><span class="text-gray-500">Account Status</span><span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script>
@@ -272,14 +417,9 @@
             window.location.href = `/portal/${patientId}`;
         };
 
-        window.editRemarks = async function(patientId) {
-            console.log('Editing remarks for patient ID:', patientId);
-            showRemarksModal(patientId);
-        };
-
         function showTab(tab) {
             // Hide all tabs
-            ['tab-dashboard','tab-patients','tab-screenings'].forEach(id => {
+            ['tab-dashboard','tab-patients','tab-screenings','tab-analytics','tab-notes','tab-profile'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             // Show selected tab
@@ -296,6 +436,9 @@
             // Load data for specific tabs
             if (tab === 'patients') loadPatients();
             if (tab === 'screenings') loadScreenings();
+            if (tab === 'analytics') loadDoctorAnalytics();
+            if (tab === 'notes') loadNotesTab();
+            if (tab === 'profile') loadDoctorProfile();
         }
 
         async function loadPatients() {
@@ -330,8 +473,7 @@
                         <td class="py-3">${p.emergency_contact || '-'}</td>
                         <td class="py-3">
                             <button data-action="view" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-2">View</button>
-                            <button data-action="screen" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 mr-2">Screen</button>
-                            <button data-action="remarks" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600">Remarks</button>
+                            <button data-action="screen" data-patient-id="${p.id}" class="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">Screen</button>
                         </td>
                     `;
                     return row.outerHTML;
@@ -345,7 +487,6 @@
         function applyDoctorPatientFilters() {
             const searchTerm = document.getElementById('doctor-patient-search').value.toLowerCase();
             const dateFilter = document.getElementById('doctor-patient-date-filter').value;
-            const remarksFilter = document.getElementById('doctor-patient-remarks-filter').value;
             
             let filtered = window.allDoctorPatients.filter(patient => {
                 // Search filter
@@ -384,15 +525,7 @@
                     }
                 }
                 
-                // Remarks filter
-                let remarksMatch = true;
-                if (remarksFilter === 'has') {
-                    remarksMatch = patient.remarks && patient.remarks.trim() !== '';
-                } else if (remarksFilter === 'no') {
-                    remarksMatch = !patient.remarks || patient.remarks.trim() === '';
-                }
-                
-                return searchMatch && dateMatch && remarksMatch;
+                return searchMatch && dateMatch;
             });
             
             displayDoctorPatients(filtered);
@@ -401,7 +534,6 @@
         function clearDoctorPatientFilters() {
             document.getElementById('doctor-patient-search').value = '';
             document.getElementById('doctor-patient-date-filter').value = '';
-            document.getElementById('doctor-patient-remarks-filter').value = '';
             displayDoctorPatients(window.allDoctorPatients);
         }
 
@@ -495,113 +627,6 @@
             displayScreenings(window.allDoctorScreenings || []);
         }
 
-        
-        // Show remarks modal with read/write functionality
-        async function showRemarksModal(patientId) {
-            try {
-                // First get current patient data to load existing remarks
-                const resp = await fetch(`/api/patients/${patientId}`);
-                const data = await resp.json();
-                
-                if (!data.patient) {
-                    alert('Error loading patient data');
-                    return;
-                }
-                
-                const patient = data.patient;
-                
-                const modal = document.createElement('div');
-                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-                modal.innerHTML = `
-                    <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xl font-bold text-gray-900">Patient Remarks</h3>
-                            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h4 class="font-semibold text-gray-700 mb-2">Patient Information</h4>
-                            <div class="bg-gray-50 p-3 rounded-lg">
-                                <p><strong>Name:</strong> ${patient.name || '-'}</p>
-                                <p><strong>Medical ID:</strong> ${patient.medical_id || '-'}</p>
-                                <p><strong>Contact:</strong> ${patient.contact_number || '-'}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h4 class="font-semibold text-gray-700 mb-2">Current Remarks</h4>
-                            <div id="current-remarks" class="bg-blue-50 p-3 rounded-lg min-h-[60px] text-gray-700 whitespace-pre-wrap">
-                                ${patient.remarks || 'No remarks currently recorded.'}
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h4 class="font-semibold text-gray-700 mb-2">Add New Remark</h4>
-                            <textarea id="new-remarks" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="4" placeholder="Enter new remark here..."></textarea>
-                        </div>
-                        
-                        <div class="flex justify-end space-x-3">
-                            <button id="cancel-remarks-btn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button id="save-remarks-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Save Remarks</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-                
-                // Focus on textarea and add event listeners
-                setTimeout(() => {
-                    const textarea = document.getElementById('new-remarks');
-                    if (textarea) textarea.focus();
-                    
-                    // Add event listeners for buttons
-                    const cancelBtn = document.getElementById('cancel-remarks-btn');
-                    const saveBtn = document.getElementById('save-remarks-btn');
-                    
-                    if (cancelBtn) {
-                        cancelBtn.addEventListener('click', () => {
-                            modal.remove();
-                        });
-                    }
-                    
-                    if (saveBtn) {
-                        saveBtn.addEventListener('click', () => {
-                            saveRemarksFromModal(patientId, modal);
-                        });
-                    }
-                }, 100);
-                
-            } catch(e) {
-                console.error('Error showing remarks modal:', e);
-                alert('Error loading remarks modal');
-            }
-        }
-
-        // Save remarks from modal
-        async function saveRemarksFromModal(patientId, modal) {
-            const remarks = document.getElementById('new-remarks').value.trim();
-            try {
-                console.log('Saving remarks for patient:', patientId, remarks);
-                
-                const resp = await fetch(`/api/patients/${patientId}/remarks`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ remarks })
-                });
-                
-                const data = await resp.json();
-                if (data.success) {
-                    alert('Remarks updated successfully');
-                    modal.remove();
-                    loadPatients(); // Refresh patients list
-                } else {
-                    alert('Error updating remarks: ' + (data.error || 'Unknown error'));
-                }
-            } catch(e) { 
-                console.error('Error updating remarks:', e); 
-                alert('Error updating remarks. Please check console for details.');
-            }
-        }
-
         // Show patient detail modal
         function showPatientModal(patient) {
             const modal = document.createElement('div');
@@ -667,16 +692,6 @@
             document.body.appendChild(modal);
         }
 
-        
-        // Test function to verify JavaScript is working
-        function testFunction() {
-            console.log('Test function called!');
-            console.log('viewPatientDetail function exists:', typeof window.viewPatientDetail);
-            console.log('startScreening function exists:', typeof window.startScreening);
-            console.log('editRemarks function exists:', typeof window.editRemarks);
-            alert('JavaScript is working! Test successful.');
-        }
-
         // Add event delegation for patient action buttons
         document.addEventListener('click', function(e) {
             const button = e.target.closest('button[data-action]');
@@ -690,21 +705,204 @@
                     window.viewPatientDetail(patientId);
                 } else if (action === 'screen') {
                     window.startScreening(patientId);
-                } else if (action === 'remarks') {
-                    window.editRemarks(patientId);
                 }
             }
         });
 
-        // Initialize - verify all functions are loaded
-        console.log('Doctor dashboard loaded - checking functions:');
-        console.log('viewPatientDetail:', typeof window.viewPatientDetail);
-        console.log('startScreening:', typeof window.startScreening);
-        console.log('editRemarks:', typeof window.editRemarks);
+        // --- Doctor Analytics ---
+        let docCharts = {};
 
-        // Handle hash-based tab switching and initial sidebar highlight
+        async function loadDoctorAnalytics() {
+            try {
+                const [screeningsResp, patientsResp] = await Promise.all([
+                    fetch('/api/screenings'),
+                    fetch('/api/patients')
+                ]);
+                const screeningsData = await screeningsResp.json();
+                const patientsData = await patientsResp.json();
+                const screenings = screeningsData.screenings || [];
+                const patients = patientsData.patients || [];
+
+                const total = screenings.length;
+                const high = screenings.filter(s => s.severity === 'High').length;
+                const moderate = screenings.filter(s => s.severity === 'Moderate').length;
+                const low = screenings.filter(s => s.severity === 'Low').length;
+
+                document.getElementById('doc-analytics-total').textContent = total;
+                document.getElementById('doc-analytics-patients').textContent = patients.length;
+                document.getElementById('doc-analytics-high').textContent = high;
+                document.getElementById('doc-analytics-high-pct').textContent = total > 0 ? `${((high/total)*100).toFixed(1)}% of total` : '';
+
+                const last7 = screenings.filter(s => {
+                    const d = new Date(s.created_at);
+                    const week = new Date(); week.setDate(week.getDate() - 7);
+                    return d >= week;
+                }).length;
+                document.getElementById('doc-analytics-trend').textContent = `${last7} in the last 7 days`;
+
+                Object.values(docCharts).forEach(c => c.destroy());
+                docCharts = {};
+
+                // Trend (30 days)
+                const trendData = {};
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date(); d.setDate(d.getDate() - i);
+                    trendData[d.toISOString().substring(0,10)] = 0;
+                }
+                screenings.forEach(s => {
+                    const date = (s.created_at || '').substring(0,10);
+                    if (trendData.hasOwnProperty(date)) trendData[date]++;
+                });
+                docCharts.trend = new Chart(document.getElementById('doc-chart-trend'), {
+                    type: 'line',
+                    data: {
+                        labels: Object.keys(trendData).map(d => d.substring(5)),
+                        datasets: [{ label: 'Screenings', data: Object.values(trendData), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, pointRadius: 2 }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+
+                // Severity doughnut
+                docCharts.severity = new Chart(document.getElementById('doc-chart-severity'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Low', 'Moderate', 'High'],
+                        datasets: [{ data: [low, moderate, high], backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'], borderWidth: 2 }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                });
+
+                // Screenings per patient
+                const perPatient = {};
+                screenings.forEach(s => {
+                    const name = s.patients?.name || 'Unknown';
+                    perPatient[name] = (perPatient[name] || 0) + 1;
+                });
+                docCharts.perPatient = new Chart(document.getElementById('doc-chart-per-patient'), {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(perPatient),
+                        datasets: [{ label: 'Screenings', data: Object.values(perPatient), backgroundColor: '#6366f1', borderRadius: 4 }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            } catch(e) { console.error('Error loading doctor analytics:', e); }
+        }
+
+        // --- Notes & History ---
+        window._notesPatients = [];
+
+        async function loadNotesTab() {
+            try {
+                const resp = await fetch('/api/patients');
+                const data = await resp.json();
+                window._notesPatients = data.patients || [];
+                const select = document.getElementById('notes-patient-select');
+                select.innerHTML = '<option value="">-- Select a patient --</option>';
+                window._notesPatients.forEach(p => {
+                    select.innerHTML += `<option value="${p.id}">${p.name} (${p.medical_id || '-'})</option>`;
+                });
+            } catch(e) { console.error('Error loading notes tab:', e); }
+        }
+
+        async function loadPatientTimeline() {
+            const patientId = document.getElementById('notes-patient-select').value;
+            const sevFilter = document.getElementById('notes-severity-filter').value;
+            const timeline = document.getElementById('notes-timeline');
+            const summary = document.getElementById('notes-patient-summary');
+
+            if (!patientId) {
+                summary.classList.add('hidden');
+                timeline.innerHTML = '<p class="text-center text-gray-400 py-8">Select a patient to view their screening timeline</p>';
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/api/patients/${patientId}`);
+                const data = await resp.json();
+                if (!data.patient) { timeline.innerHTML = '<p class="text-center text-red-400 py-8">Error loading patient</p>'; return; }
+
+                const patient = data.patient;
+                summary.classList.remove('hidden');
+                document.getElementById('notes-p-name').textContent = patient.name || '-';
+                document.getElementById('notes-p-mid').textContent = patient.medical_id || '-';
+                document.getElementById('notes-p-contact').textContent = patient.contact_number || '-';
+                document.getElementById('notes-p-remarks').textContent = patient.remarks || 'None';
+
+                let screenings = patient.screenings || [];
+                if (sevFilter) screenings = screenings.filter(s => s.severity === sevFilter);
+
+                if (screenings.length === 0) {
+                    timeline.innerHTML = '<p class="text-center text-gray-400 py-8">No screenings found for this patient</p>';
+                    return;
+                }
+
+                // Sort by date descending
+                screenings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+                timeline.innerHTML = screenings.map((s, i) => {
+                    const date = s.created_at ? new Date(s.created_at).toLocaleString() : '-';
+                    const sevColor = (s.severity||'').toLowerCase() === 'high' ? 'border-red-500 bg-red-50' : (s.severity||'').toLowerCase() === 'moderate' ? 'border-yellow-500 bg-yellow-50' : 'border-green-500 bg-green-50';
+                    const sevBadge = (s.severity||'').toLowerCase() === 'high' ? 'bg-red-100 text-red-800' : (s.severity||'').toLowerCase() === 'moderate' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
+                    const confidence = s.confidence_score ? (s.confidence_score * 100).toFixed(1) + '%' : '-';
+                    const notes = s.notes || 'No notes recorded';
+                    return `<div class="border-l-4 ${sevColor} rounded-lg p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="px-2 py-1 rounded-full text-xs font-medium ${sevBadge}">${s.severity || '-'}</span>
+                                <span class="text-xs text-gray-500 ml-2">Confidence: ${confidence}</span>
+                            </div>
+                            <span class="text-xs text-gray-400">${date}</span>
+                        </div>
+                        <p class="text-sm text-gray-700">${notes}</p>
+                        <div class="mt-2">
+                            <textarea id="clinical-note-${s.id}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500" rows="2" placeholder="Add clinical note for this screening...">${s.clinical_note || ''}</textarea>
+                            <button onclick="saveClinicalNote('${s.id}')" class="mt-1 px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600">Save Note</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch(e) { console.error('Error loading patient timeline:', e); }
+        }
+
+        async function saveClinicalNote(screeningId) {
+            const note = document.getElementById(`clinical-note-${screeningId}`).value.trim();
+            try {
+                const resp = await fetch(`/api/screenings/${screeningId}/note`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clinical_note: note })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert('Clinical note saved successfully');
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to save note'));
+                }
+            } catch(e) { console.error('Error saving clinical note:', e); alert('Error saving note'); }
+        }
+
+        // --- My Profile (read-only) ---
+        async function loadDoctorProfile() {
+            try {
+                const resp = await fetch('/api/doctor/profile');
+                const data = await resp.json();
+                if (data.doctor) {
+                    const d = data.doctor;
+                    document.getElementById('profile-name').textContent = d.name || '-';
+                    document.getElementById('profile-position').textContent = d.position || '-';
+                    document.getElementById('profile-specialization').textContent = d.specialization || '-';
+                    document.getElementById('profile-license').textContent = d.license_number || '-';
+                    document.getElementById('profile-hospital-id').textContent = d.hospital_id || d.id || '-';
+                    document.getElementById('profile-avatar').textContent = (d.name || 'D').charAt(0).toUpperCase();
+                    document.getElementById('profile-display-name').textContent = d.name || '';
+                }
+            } catch(e) { console.error('Error loading profile:', e); }
+        }
+
+        // Initialize
         const hash = window.location.hash.substring(1);
-        if (hash && ['patients', 'screenings', 'dashboard'].includes(hash)) {
+        const validTabs = ['patients', 'screenings', 'dashboard', 'analytics', 'notes', 'profile'];
+        if (hash && validTabs.includes(hash)) {
             showTab(hash);
         } else {
             showTab('dashboard');
@@ -715,10 +913,10 @@
         document.getElementById('screenings-date-filter')?.addEventListener('change', applyScreeningsFilters);
         document.getElementById('screenings-severity-filter')?.addEventListener('change', applyScreeningsFilters);
         
-        // Listen for hash changes to update sidebar active state
+        // Listen for hash changes
         window.addEventListener('hashchange', function() {
             const h = window.location.hash.substring(1);
-            if (h && ['patients', 'screenings', 'dashboard'].includes(h)) {
+            if (h && validTabs.includes(h)) {
                 showTab(h);
             }
         });

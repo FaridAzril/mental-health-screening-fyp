@@ -657,6 +657,7 @@ def api_save_screening():
         severity = data.get('severity', '').strip()
         confidence_score = data.get('confidence_score')
         notes = data.get('notes', '').strip()
+        clinical_note = data.get('clinical_note', '').strip()
         session_data = data.get('sessionData', [])  # Get session data from frontend
         
         if not patient_id or not severity:
@@ -687,6 +688,7 @@ def api_save_screening():
             'severity': severity,
             'severity_level': severity_level,
             'notes': notes,
+            'clinical_note': clinical_note if clinical_note else None,
             'session_data': json.dumps(session_data) if session_data else None
         }
         if confidence_score is not None:
@@ -909,6 +911,8 @@ def api_create_doctor():
             }
         )
         
+        admin_email = session['user'].get('email', 'unknown')
+        log_security_event('DOCTOR_CREATED', request.remote_addr, f'Admin {admin_email} created doctor account: {name} ({email})')
         return {'success': True, 'doctor_id': user_id}, 201
     except Exception as e:
                 return {'error': str(e)}, 500
@@ -993,6 +997,8 @@ def api_create_patient():
         )
         
         if resp.status_code in [200, 201]:
+            admin_email = session['user'].get('email', 'unknown')
+            log_security_event('PATIENT_CREATED', request.remote_addr, f'Admin {admin_email} created patient: {name} (ID: {medical_id})')
             return {'success': True, 'patient': resp.json()}, 201
         return {'error': f'Failed to create patient: {resp.text[:200]}'}, 400
     except Exception as e:
@@ -1039,6 +1045,8 @@ def api_update_doctor():
         )
         
         if resp.status_code in [200, 204]:
+            admin_email = session['user'].get('email', 'unknown')
+            log_security_event('DOCTOR_UPDATED', request.remote_addr, f'Admin {admin_email} updated doctor {doctor_id}: {update_data}')
             return {'success': True}, 200
         return {'error': f'Failed to update doctor: {resp.text[:200]}'}, 400
     except Exception as e:
@@ -1076,6 +1084,8 @@ def api_update_doctor_status():
         )
         
         if resp.status_code in [200, 204]:
+            admin_email = session['user'].get('email', 'unknown')
+            log_security_event('DOCTOR_STATUS_CHANGED', request.remote_addr, f'Admin {admin_email} changed doctor {doctor_id} status to {new_status}')
             return {'success': True, 'status': new_status}, 200
         return {'error': f'Failed to update status: {resp.text[:200]}'}, 400
     except Exception as e:
@@ -1111,8 +1121,83 @@ def api_reassign_patient():
         )
         
         if resp.status_code in [200, 204]:
+            admin_email = session['user'].get('email', 'unknown')
+            log_security_event('PATIENT_REASSIGNED', request.remote_addr, f'Admin {admin_email} reassigned patient {patient_id} to doctor {new_doctor_id}')
             return {'success': True}, 200
         return {'error': f'Failed to reassign patient: {resp.text[:200]}'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/audit-log')
+@login_required
+def api_audit_log():
+    """API endpoint to get audit/activity log (admin only)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        if session['user'].get('role') != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        # Return security log in reverse chronological order
+        logs = list(reversed(SECURITY_LOG))
+        return {'logs': logs}, 200
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/doctor/profile', methods=['GET'])
+@login_required
+def api_doctor_profile():
+    """Get the logged-in doctor's profile (read-only, edits managed by admin)"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        if session['user'].get('role') != 'doctor':
+            return {'error': 'Unauthorized'}, 403
+        
+        user_id = session['user']['id']
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        svc_headers = {
+            'apikey': SUPABASE_SERVICE_KEY,
+            'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        resp = supabase.client.get(
+            f"{supabase.url}/rest/v1/doctors?select=*&user_id=eq.{user_id}",
+            headers=svc_headers, timeout=10.0
+        )
+        if resp.status_code == 200 and resp.json():
+            return {'doctor': resp.json()[0]}, 200
+        return {'doctor': None}, 200
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/screenings/<screening_id>/note', methods=['PUT'])
+@login_required
+def api_screening_note(screening_id):
+    """Add or update a clinical note on a screening"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        
+        data = request.get_json()
+        clinical_note = data.get('clinical_note', '').strip()
+        
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        resp = supabase.client.patch(
+            f"{supabase.url}/rest/v1/screenings?id=eq.{screening_id}",
+            json={'clinical_note': clinical_note},
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        )
+        
+        if resp.status_code in [200, 204]:
+            return {'success': True}, 200
+        return {'error': f'Failed to save note: {resp.text[:200]}'}, 400
     except Exception as e:
         return {'error': str(e)}, 500
 
