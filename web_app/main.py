@@ -140,9 +140,9 @@ def add_security_headers(response):
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'  # HTTPS only in production
     return response
 
-# IP-based Rate Limiting
+# IP-based Rate Limiting (per-endpoint)
 def rate_limit(max_requests=100, window_seconds=3600):
-    """Rate limiting decorator"""
+    """Rate limiting decorator - uses endpoint-specific keys"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -152,20 +152,23 @@ def rate_limit(max_requests=100, window_seconds=3600):
             if client_ip in BLOCKED_IPS:
                 return make_response('IP blocked due to suspicious activity', 403)
             
+            # Use endpoint-specific key so different endpoints don't share limits
+            endpoint_key = f"{client_ip}:{f.__name__}"
+            
             # Clean old requests
             now = time.time()
-            RATE_LIMIT_STORAGE[client_ip] = deque(
-                [req_time for req_time in RATE_LIMIT_STORAGE[client_ip] 
+            RATE_LIMIT_STORAGE[endpoint_key] = deque(
+                [req_time for req_time in RATE_LIMIT_STORAGE[endpoint_key] 
                  if now - req_time < window_seconds],
                 maxlen=max_requests
             )
             
             # Check rate limit
-            if len(RATE_LIMIT_STORAGE[client_ip]) >= max_requests:
+            if len(RATE_LIMIT_STORAGE[endpoint_key]) >= max_requests:
                 return make_response('Rate limit exceeded', 429)
             
             # Add current request
-            RATE_LIMIT_STORAGE[client_ip].append(now)
+            RATE_LIMIT_STORAGE[endpoint_key].append(now)
             
             return f(*args, **kwargs)
         return decorated_function
@@ -447,39 +450,64 @@ def api_patients():
     try:
         if 'user' not in session:
             return {'error': 'Not authenticated'}, 401
-        auth_token = session['user'].get('access_token')
+        
         role = session['user'].get('role', '')
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        print(f"[api_patients] role={role}, service_key_exists={bool(SUPABASE_SERVICE_KEY)}")
+        
+        svc_headers = {
+            'apikey': SUPABASE_SERVICE_KEY,
+            'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+            'Content-Type': 'application/json'
+        }
         
         if role == 'admin':
-            # Use service role key to join patients with doctors
-            from supabase_client_working import SUPABASE_SERVICE_KEY
             resp = supabase.client.get(
-                f"{supabase.url}/rest/v1/patients?select=*,doctors(name)&order=created_at.desc",
-                headers={
-                    'apikey': SUPABASE_SERVICE_KEY,
-                    'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
-                    'Content-Type': 'application/json'
-                }
+                f"{supabase.url}/rest/v1/patients?select=*,doctors(id,name)&order=created_at.desc",
+                headers=svc_headers, timeout=10.0
             )
+            print(f"[api_patients] admin query status={resp.status_code}")
+            if resp.status_code == 200:
+                return {'patients': resp.json()}
+            print(f"[api_patients] admin query failed: {resp.text[:200]}")
+            return {'patients': []}
         else:
-            # Doctor sees only their patients - lookup doctor.id from doctors table first
+            # Doctor: get all patients assigned to this doctor
             user_id = session['user']['id']
-            from supabase_client_working import SUPABASE_SERVICE_KEY
-            doctor_resp = supabase.table('doctors').select('id,name').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+            print(f"[api_patients] doctor user_id={user_id}")
+            
+            # First get doctor record ID
+            doctor_resp = supabase.client.get(
+                f"{supabase.url}/rest/v1/doctors?select=id&user_id=eq.{user_id}",
+                headers=svc_headers, timeout=10.0
+            )
+            print(f"[api_patients] doctor lookup status={doctor_resp.status_code}")
+            
             if doctor_resp.status_code == 200:
                 doctors = doctor_resp.json()
-                if doctors:
+                print(f"[api_patients] doctors found: {doctors}")
+                if doctors and len(doctors) > 0:
                     doctor_id = doctors[0]['id']
-                    resp = supabase.table('patients').select('*').eq('assigned_doctor_id', doctor_id).execute(auth_token=auth_token)
+                    patients_resp = supabase.client.get(
+                        f"{supabase.url}/rest/v1/patients?select=*&assigned_doctor_id=eq.{doctor_id}&order=created_at.desc",
+                        headers=svc_headers, timeout=10.0
+                    )
+                    print(f"[api_patients] patients query status={patients_resp.status_code}")
+                    if patients_resp.status_code == 200:
+                        patients = patients_resp.json()
+                        print(f"[api_patients] returning {len(patients)} patients")
+                        return {'patients': patients}
+                    print(f"[api_patients] patients query failed: {patients_resp.text[:200]}")
                 else:
-                    resp = type('obj', (), {'status_code': 200, 'json': lambda: []})()
+                    print(f"[api_patients] no doctor record found for user_id={user_id}")
             else:
-                resp = type('obj', (), {'status_code': 200, 'json': lambda: []})()
-        
-        if resp.status_code == 200:
-            return {'patients': resp.json()}
-        return {'patients': []}
+                print(f"[api_patients] doctor lookup failed: {doctor_resp.text[:200]}")
+            
+            return {'patients': []}
     except Exception as e:
+        print(f"[api_patients] ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'error': str(e)}, 500
 
 @app.route('/api/screenings')
@@ -649,7 +677,7 @@ def api_save_screening():
             if patient_resp.json()[0].get('assigned_doctor_id') != doctor_id:
                 return {'error': 'Unauthorized - not your patient'}, 403
         
-        # Map severity string to integer for severity_level column
+        # Map severity string to integer for severity_level column (1=Low, 2=Moderate, 3=High)
         severity_map = {'Low': 1, 'Moderate': 2, 'High': 3}
         severity_level = severity_map.get(severity, 2)  # Default to 2 (Moderate) if unknown
         
@@ -741,7 +769,9 @@ def api_doctors():
                 'position': position,
                 'role': role,
                 'email': user_profile.get('email', '-'),
-                'hospital_id': doctor.get('hospital_id', doctor.get('id', '-'))  # Use hospital_id field first
+                'hospital_id': doctor.get('hospital_id', doctor.get('id', '-')),
+                'license_number': doctor.get('license_number', ''),
+                'status': doctor.get('status', 'active')
             })
         
         return {'doctors': doctors_data}
@@ -968,6 +998,124 @@ def api_create_patient():
     except Exception as e:
                 return {'error': str(e)}, 500
 
+@app.route('/api/doctors/update', methods=['POST'])
+@login_required
+def api_update_doctor():
+    """Update doctor account details"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        if session['user'].get('role') != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        doctor_id = data.get('doctor_id')
+        if not doctor_id:
+            return {'error': 'Doctor ID required'}, 400
+        
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        update_data = {}
+        if data.get('name'):
+            update_data['name'] = data['name'].strip()
+        if data.get('position'):
+            update_data['position'] = data['position'].strip()
+        if data.get('specialization'):
+            update_data['specialization'] = data['specialization'].strip()
+        if data.get('license_number'):
+            update_data['license_number'] = data['license_number'].strip()
+        
+        if not update_data:
+            return {'error': 'No fields to update'}, 400
+        
+        resp = supabase.client.patch(
+            f"{supabase.url}/rest/v1/doctors?id=eq.{doctor_id}",
+            json=update_data,
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        )
+        
+        if resp.status_code in [200, 204]:
+            return {'success': True}, 200
+        return {'error': f'Failed to update doctor: {resp.text[:200]}'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/doctors/update-status', methods=['POST'])
+@login_required
+def api_update_doctor_status():
+    """Activate or deactivate a doctor account"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        if session['user'].get('role') != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        doctor_id = data.get('doctor_id')
+        new_status = data.get('status')
+        
+        if not doctor_id or not new_status:
+            return {'error': 'Doctor ID and status required'}, 400
+        if new_status not in ['active', 'inactive']:
+            return {'error': 'Status must be active or inactive'}, 400
+        
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        resp = supabase.client.patch(
+            f"{supabase.url}/rest/v1/doctors?id=eq.{doctor_id}",
+            json={'status': new_status},
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        )
+        
+        if resp.status_code in [200, 204]:
+            return {'success': True, 'status': new_status}, 200
+        return {'error': f'Failed to update status: {resp.text[:200]}'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/api/patients/reassign', methods=['POST'])
+@login_required
+def api_reassign_patient():
+    """Reassign a patient to a different doctor"""
+    try:
+        if 'user' not in session:
+            return {'error': 'Not authenticated'}, 401
+        if session['user'].get('role') != 'admin':
+            return {'error': 'Unauthorized'}, 403
+        
+        data = request.get_json()
+        patient_id = data.get('patient_id')
+        new_doctor_id = data.get('new_doctor_id')
+        
+        if not patient_id or not new_doctor_id:
+            return {'error': 'Patient ID and new doctor ID required'}, 400
+        
+        from supabase_client_working import SUPABASE_SERVICE_KEY
+        resp = supabase.client.patch(
+            f"{supabase.url}/rest/v1/patients?id=eq.{patient_id}",
+            json={'assigned_doctor_id': new_doctor_id},
+            headers={
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+        )
+        
+        if resp.status_code in [200, 204]:
+            return {'success': True}, 200
+        return {'error': f'Failed to reassign patient: {resp.text[:200]}'}, 400
+    except Exception as e:
+        return {'error': str(e)}, 500
+
 @app.route('/portal')
 @app.route('/portal/<patient_id>')
 @login_required
@@ -978,6 +1126,234 @@ def portal(patient_id=None):
         return render_template('working_ensemble.html', patient_id=patient_id, user=session.get('user'))
     except:
         return "Portal file not found. Please ensure working_ensemble.html exists in templates folder.", 404
+
+@app.route('/extract-au-features', methods=['POST'])
+@login_required
+@rate_limit(max_requests=1000, window_seconds=60)
+def extract_au_features():
+    """Extract AU features from video frame using MediaPipe Face Mesh landmarks"""
+    try:
+        import cv2
+        import numpy as np
+        from PIL import Image
+        import io
+        import base64
+        import mediapipe as mp
+        from mediapipe.tasks.python import vision
+        from mediapipe.tasks.python import BaseOptions
+        
+        data = request.get_json()
+        if not data or 'frame_data' not in data:
+            return {'error': 'Frame data required'}, 400
+        
+        frame_data = data['frame_data']
+        if frame_data.startswith('data:image/'):
+            frame_data = frame_data.split(',')[1]
+        
+        image_bytes = base64.b64decode(frame_data)
+        image = Image.open(io.BytesIO(image_bytes))
+        frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Initialize FaceLandmarker if not cached
+        if not hasattr(extract_au_features, '_landmarker'):
+            model_path = os.path.join(os.path.dirname(__file__), 'models', 'face_landmarker.task')
+            options = vision.FaceLandmarkerOptions(
+                base_options=BaseOptions(model_asset_path=model_path),
+                running_mode=vision.RunningMode.IMAGE,
+                num_faces=1,
+                min_face_detection_confidence=0.5,
+                min_face_presence_confidence=0.5
+            )
+            extract_au_features._landmarker = vision.FaceLandmarker.create_from_options(options)
+        
+        landmarker = extract_au_features._landmarker
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        result = landmarker.detect(mp_image)
+        
+        if not result.face_landmarks or len(result.face_landmarks) == 0:
+            return {'au_features': [0.0] * 17, 'face_detected': False, 'landmark_count': 0}
+        
+        landmarks = result.face_landmarks[0]
+        h, w = frame.shape[:2]
+        
+        def dist(i, j):
+            return np.sqrt((landmarks[i].x - landmarks[j].x)**2 + (landmarks[i].y - landmarks[j].y)**2)
+        
+        # Face normalization reference (distance between outer eye corners)
+        face_width = dist(33, 263)
+        if face_width < 0.001:
+            face_width = 0.1
+        
+        # AU1 - Inner Brow Raiser: inner eyebrow height relative to eye
+        au1 = (landmarks[107].y - landmarks[159].y) / face_width  # left
+        au1_r = (landmarks[336].y - landmarks[386].y) / face_width  # right
+        au1_val = np.clip((au1 + au1_r) * 3.0, 0, 1)
+        
+        # AU2 - Outer Brow Raiser: outer eyebrow height
+        au2 = (landmarks[70].y - landmarks[159].y) / face_width
+        au2_r = (landmarks[300].y - landmarks[386].y) / face_width
+        au2_val = np.clip((au2 + au2_r) * 3.0, 0, 1)
+        
+        # AU4 - Brow Lowerer: distance between inner brows
+        au4_val = np.clip(1.0 - dist(55, 285) / face_width * 3.0, 0, 1)
+        
+        # AU5 - Upper Lid Raiser: eye openness
+        eye_open_l = dist(159, 145) / face_width
+        eye_open_r = dist(386, 374) / face_width
+        au5_val = np.clip((eye_open_l + eye_open_r) * 5.0, 0, 1)
+        
+        # AU6 - Cheek Raiser: cheek landmark height
+        au6 = (landmarks[117].y - landmarks[50].y) / face_width
+        au6_r = (landmarks[346].y - landmarks[280].y) / face_width
+        au6_val = np.clip((au6 + au6_r) * 3.0, 0, 1)
+        
+        # AU7 - Lid Tightener: lower eyelid tension
+        au7_val = np.clip(1.0 - (eye_open_l + eye_open_r) * 4.0, 0, 1)
+        
+        # AU9 - Nose Wrinkler: nose bridge area compression
+        au9_val = np.clip(dist(6, 197) / face_width * 2.0, 0, 1)
+        
+        # AU10 - Upper Lip Raiser
+        au10_val = np.clip((landmarks[0].y - landmarks[13].y) / face_width * 5.0, 0, 1)
+        
+        # AU12 - Lip Corner Puller (smile): mouth width relative to rest
+        mouth_width = dist(61, 291)
+        au12_val = np.clip(mouth_width / face_width * 2.0 - 0.5, 0, 1)
+        
+        # AU14 - Dimpler: lip corner depth
+        au14_val = np.clip(abs(landmarks[61].z - landmarks[291].z) * 10.0, 0, 1)
+        
+        # AU15 - Lip Corner Depressor (frown)
+        lip_mid_y = (landmarks[13].y + landmarks[14].y) / 2
+        lip_corner_y = (landmarks[61].y + landmarks[291].y) / 2
+        au15_val = np.clip((lip_corner_y - lip_mid_y) / face_width * 5.0, 0, 1)
+        
+        # AU17 - Chin Raiser
+        au17_val = np.clip((landmarks[152].y - landmarks[17].y) / face_width * 3.0, 0, 1)
+        
+        # AU20 - Lip Stretcher
+        au20_val = np.clip(mouth_width / face_width * 1.5 - 0.3, 0, 1)
+        
+        # AU23 - Lip Tightener: lip thickness
+        lip_thickness = dist(13, 14)
+        au23_val = np.clip(1.0 - lip_thickness / face_width * 8.0, 0, 1)
+        
+        # AU25 - Lips Part: mouth openness vertical
+        mouth_open = dist(13, 14)
+        au25_val = np.clip(mouth_open / face_width * 6.0, 0, 1)
+        
+        # AU26 - Jaw Drop
+        jaw_drop = dist(13, 17)
+        au26_val = np.clip(jaw_drop / face_width * 3.0 - 0.3, 0, 1)
+        
+        # AU45 - Blink: eye closure
+        au45_val = np.clip(1.0 - (eye_open_l + eye_open_r) * 6.0, 0, 1)
+        
+        au_features = [
+            au1_val, au2_val, au4_val, au5_val, au6_val, au7_val,
+            au9_val, au10_val, au12_val, au14_val, au15_val, au17_val,
+            au20_val, au23_val, au25_val, au26_val, au45_val
+        ]
+        
+        return {
+            'au_features': [float(v) for v in au_features],
+            'face_detected': True,
+            'landmark_count': len(landmarks)
+        }
+        
+    except Exception as e:
+        print(f"AU extraction error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}, 500
+
+@app.route('/predict-severity', methods=['POST'])
+@login_required
+@rate_limit(max_requests=500, window_seconds=60)
+def predict_severity():
+    """Real ensemble model prediction endpoint"""
+    try:
+        import tensorflow as tf
+        import numpy as np
+        
+        data = request.get_json()
+        if not data or 'au_features' not in data:
+            return {'error': 'AU features required'}, 400
+        
+        au_features = np.array(data['au_features'])
+        
+        # Reshape to (1, 300, 17) for model input
+        if len(au_features.shape) == 2:
+            au_features = au_features.reshape(1, au_features.shape[0], au_features.shape[1])
+        
+        if au_features.shape != (1, 300, 17):
+            return {'error': f'Invalid shape. Expected (1, 300, 17), got {au_features.shape}'}, 400
+        
+        # Load models (cached)
+        if not hasattr(predict_severity, 'models_loaded'):
+            print("Loading ensemble models...")
+            predict_severity.models = []
+            for i in range(1, 4):
+                model_path = f'models/ensemble_{i}.h5'
+                try:
+                    model = tf.keras.models.load_model(model_path, compile=False)
+                    predict_severity.models.append(model)
+                    print(f"Loaded ensemble_{i}.h5")
+                except Exception as e:
+                    print(f"Failed to load ensemble_{i}.h5: {e}")
+                    return {'error': f'Model loading failed: {str(e)}'}, 500
+            predict_severity.models_loaded = True
+            print("All ensemble models loaded!")
+        
+        # Standardize input
+        au_flat = au_features.reshape(-1, 17)
+        mean = np.mean(au_flat, axis=0)
+        std = np.std(au_flat, axis=0) + 1e-8
+        au_scaled = (au_flat - mean) / std
+        au_processed = au_scaled.reshape(1, 300, 17)
+        
+        # Get predictions from all 3 models
+        model_predictions = []
+        for i, model in enumerate(predict_severity.models):
+            pred = model.predict(au_processed, verbose=0)[0]
+            model_predictions.append(pred)
+        
+        # Ensemble voting with weights [1.0, 1.0, 1.5]
+        weights = [1.0, 1.0, 1.5]
+        weighted_results = np.zeros(3)
+        for i, pred in enumerate(model_predictions):
+            for j in range(3):
+                weighted_results[j] += pred[j] * weights[i]
+        
+        total_weight = sum(weights)
+        final_probs = weighted_results / total_weight
+        
+        # Dynamic thresholding
+        low, moderate, high = final_probs
+        severity = 'Low'
+        if high > moderate * 1.2 and high > 0.35:
+            severity = 'High'
+        elif moderate > 0.35:
+            severity = 'Moderate'
+        
+        return {
+            'severity': severity,
+            'confidence': float(np.max(final_probs)),
+            'probabilities': {
+                'low': float(low),
+                'moderate': float(moderate),
+                'high': float(high)
+            },
+            'model_predictions': [
+                {'model': f'Model {i+1}', 'probabilities': {'low': float(p[0]), 'moderate': float(p[1]), 'high': float(p[2])}}
+                for i, p in enumerate(model_predictions)
+            ]
+        }
+        
+    except Exception as e:
+        print(f"Prediction error: {str(e)}")
+        return {'error': str(e)}, 500
 
 @app.route('/models/<path:filename>')
 @login_required
@@ -994,7 +1370,7 @@ def serve_models(filename):
         return "Model file not found.", 404
 
 @app.route('/css/<path:filename>')
-@rate_limit(max_requests=20, window_seconds=300)
+@rate_limit(max_requests=500, window_seconds=300)
 def serve_css(filename):
     """Serve CSS files"""
     try:
@@ -1008,7 +1384,7 @@ def serve_css(filename):
         return f"CSS file {filename} not found.", 404
 
 @app.route('/js/<path:filename>')
-@rate_limit(max_requests=20, window_seconds=300)
+@rate_limit(max_requests=500, window_seconds=300)
 def serve_js(filename):
     """Serve JavaScript files"""
     try:
@@ -1052,6 +1428,22 @@ if __name__ == '__main__':
     print("   - Portal: http://localhost:5000/portal")
     print("   - Security: Rate limiting, CSRF protection, Brute force protection")
     print("   - Protocol: HTTP")
+    
+    # Preload ensemble models at startup
+    try:
+        import tensorflow as tf
+        print(" Loading ensemble models...")
+        predict_severity.models = []
+        for i in range(1, 4):
+            model_path = f'models/ensemble_{i}.h5'
+            model = tf.keras.models.load_model(model_path, compile=False)
+            predict_severity.models.append(model)
+            print(f"   ✓ Loaded ensemble_{i}.h5")
+        predict_severity.models_loaded = True
+        print(" All 3 ensemble models ready!")
+    except Exception as e:
+        print(f" Warning: Could not preload models: {e}")
+    
     print(" Opening browser in 1.5 seconds...")
     
     # Start browser in background

@@ -351,10 +351,15 @@
                         </div>
                     </div>
                     
-                    <!-- Ensemble Model Details -->
-                    <div class="mb-6">
-                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Ensemble Model Results</h4>
-                        <div class="space-y-3">
+                    <!-- Ensemble Model Details (Collapsible) -->
+                    <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+                        <button onclick="toggleDropdown('ensemble-details')" class="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                            <h4 class="text-lg font-semibold text-gray-900">Ensemble Model Results</h4>
+                            <svg id="ensemble-details-icon" class="w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="ensemble-details" class="hidden p-4 space-y-3">
                             <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                 <div class="flex items-center">
                                     <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
@@ -379,11 +384,18 @@
                         </div>
                     </div>
                     
-                    <!-- Final Probabilities -->
-                    <div class="mb-6">
-                        <h4 class="text-lg font-semibold text-gray-900 mb-2">Final Probability Distribution</h4>
-                        <div class="relative" style="height: 200px;">
-                            <canvas id="final-chart"></canvas>
+                    <!-- Final Probabilities (Collapsible) -->
+                    <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+                        <button onclick="toggleDropdown('probability-details')" class="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                            <h4 class="text-lg font-semibold text-gray-900">Final Probability Distribution</h4>
+                            <svg id="probability-details-icon" class="w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="probability-details" class="hidden p-4">
+                            <div class="relative" style="height: 200px;">
+                                <canvas id="final-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                     
@@ -503,8 +515,8 @@
     <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <script>
         // Global variables
         let webcamStream = null;
@@ -518,14 +530,34 @@
         let sessionStartTime = null;
         let sessionTimer = null;
         let sessionData = [];
+        let totalAnalysisCount = 0;
         let screeningMode = 'live'; // 'live' or 'video'
         let uploadedVideoFile = null;
         let videoAnalysisCanvas = null;
 
+        // Toggle collapsible dropdown sections
+        function toggleDropdown(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                if (icon) icon.style.transform = 'rotate(180deg)';
+                // Re-render chart if opening probability section
+                if (id === 'probability-details' && finalChart) {
+                    setTimeout(() => finalChart.resize(), 50);
+                }
+            } else {
+                content.classList.add('hidden');
+                if (icon) icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
         // Initialize charts
         function initializeCharts() {
             // Live probability chart
-            const ctx = document.getElementById('probability-chart').getContext('2d');
+            const el = document.getElementById('probability-chart');
+            if (!el) return; // Canvas not present on patient selection page
+            const ctx = el.getContext('2d');
             probabilityChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -566,7 +598,9 @@
         
         // Initialize final chart
         function initializeFinalChart() {
-            const ctx = document.getElementById('final-chart').getContext('2d');
+            const el = document.getElementById('final-chart');
+            if (!el) return;
+            const ctx = el.getContext('2d');
             finalChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -624,81 +658,142 @@
             }
         }
 
-        // Simulate ensemble model analysis
-        function simulateEnsembleAnalysis() {
-            if (isAnalyzing) return;
+        // AU features collection for real model prediction
+        let collectedAUFeatures = [];
+        
+        // Real ensemble model analysis using backend API
+        async function simulateEnsembleAnalysis() {
+            if (isAnalyzing) {
+                console.log('Already analyzing, skipping...');
+                return;
+            }
             
             isAnalyzing = true;
+            console.log('Starting frame analysis, collected frames:', collectedAUFeatures.length);
             
-            // Simulate different predictions from 3 ensemble models
-            const model1Prediction = generateModelPrediction(1.0); // Base variance
-            const model2Prediction = generateModelPrediction(1.0); // Base variance
-            const model3Prediction = generateModelPrediction(1.5); // Higher weight variance
-            
-            console.log('Model predictions:', {
-                model1: model1Prediction,
-                model2: model2Prediction,
-                model3: model3Prediction
-            });
-            
-            // Apply confidence-weighted voting (same as your training)
-            const weights = [1.0, 1.0, 1.5]; // Model 3 has 1.5x weight
-            const weightedResults = [0, 0, 0];
-            
-            const models = [model1Prediction, model2Prediction, model3Prediction];
-            for (let i = 0; i < 3; i++) {
-                for (let j = 0; j < 3; j++) {
-                    weightedResults[j] += models[i][j] * weights[i];
+            try {
+                // Capture current frame from webcam
+                const video = document.getElementById('webcam');
+                if (!video || !isWebcamOn) {
+                    console.log('Webcam not ready, video:', !!video, 'isWebcamOn:', isWebcamOn);
+                    isAnalyzing = false;
+                    return;
                 }
-            }
-            
-            // Normalize
-            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-            const finalProbs = weightedResults.map(val => val / totalWeight);
-            
-            console.log('Weighted ensemble predictions:', finalProbs);
-            
-            // Apply dynamic thresholding (same as your training)
-            let severity = 'Low';
-            const [low, moderate, high] = finalProbs;
-            
-            // Refined dynamic threshold: P(High) > P(Moderate)*1.2 AND P(High) > 0.35
-            if (high > moderate * 1.2 && high > 0.35) {
-                severity = 'High';
-            } else if (moderate > 0.35) {
-                severity = 'Moderate';
-            }
-            
-            console.log('Final severity:', severity);
-            
-            // Update UI with ensemble results
-            document.getElementById('severity-prediction').textContent = severity;
-            document.getElementById('confidence-score').textContent = 'Confidence: ' + (Math.max(...finalProbs) * 100).toFixed(1) + '%';
-            
-            // Update chart
-            probabilityChart.data.datasets[0].data = finalProbs.map(p => p * 100);
-            probabilityChart.update();
-            
-            // Update analysis count
-            const framesCount = document.getElementById('frames-count');
-            framesCount.textContent = parseInt(framesCount.textContent) + 1;
-            
-            // Store for final processing
-            sessionData.push({
-                timestamp: Date.now(),
-                low: low * 100,
-                moderate: moderate * 100,
-                high: high * 100,
-                severity: severity,
-                modelPredictions: {
-                    model1: model1Prediction,
-                    model2: model2Prediction,
-                    model3: model3Prediction
+                
+                // Create canvas to capture frame
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const frameData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // Extract AU features from frame
+                console.log('Sending frame to /extract-au-features...');
+                const auResponse = await fetch('/extract-au-features', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({frame_data: frameData})
+                });
+                
+                console.log('AU response status:', auResponse.status);
+                
+                if (!auResponse.ok) {
+                    const errorText = await auResponse.text();
+                    console.error('AU extraction failed:', auResponse.status, errorText);
+                    isAnalyzing = false;
+                    return;
                 }
-            });
-            
-            if (isAssessmentActive) {
-                updateStatus('Ensemble model analysis active', 'success');
+                
+                const auResult = await auResponse.json();
+                console.log('AU result:', auResult);
+                
+                if (auResult.error) {
+                    console.error('AU error:', auResult.error);
+                    isAnalyzing = false;
+                    return;
+                }
+                
+                // Collect AU features (need 300 frames)
+                collectedAUFeatures.push(auResult.au_features);
+                
+                // Update analysis count
+                totalAnalysisCount++;
+                const framesCount = document.getElementById('frames-count');
+                framesCount.textContent = totalAnalysisCount;
+                
+                // Update chart with placeholder while collecting
+                if (probabilityChart && collectedAUFeatures.length < 5) {
+                    const progress = collectedAUFeatures.length / 5;
+                    probabilityChart.data.datasets[0].data = [33 * progress, 33 * progress, 33 * progress];
+                    probabilityChart.update();
+                }
+                
+                // When we have 5 frames, get real prediction (~15 seconds)
+                if (collectedAUFeatures.length >= 5) {
+                    updateStatus('Running real model prediction...', 'analyzing');
+                    
+                    // Pad to 300 frames by repeating the collected frames
+                    let paddedFeatures = [];
+                    while (paddedFeatures.length < 300) {
+                        paddedFeatures = paddedFeatures.concat(collectedAUFeatures);
+                    }
+                    paddedFeatures = paddedFeatures.slice(0, 300);
+                    
+                    const predictResponse = await fetch('/predict-severity', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
+                        body: JSON.stringify({au_features: paddedFeatures})
+                    });
+                    
+                    if (predictResponse.ok) {
+                        const prediction = await predictResponse.json();
+                        
+                        if (!prediction.error) {
+                            console.log('Real ensemble prediction:', prediction);
+                            
+                            const finalProbs = [
+                                prediction.probabilities.low,
+                                prediction.probabilities.moderate,
+                                prediction.probabilities.high
+                            ];
+                            
+                            // Update UI with real results
+                            document.getElementById('severity-prediction').textContent = prediction.severity;
+                            document.getElementById('confidence-score').textContent = 'Confidence: ' + (prediction.confidence * 100).toFixed(1) + '%';
+                            
+                            // Update chart
+                            probabilityChart.data.datasets[0].data = finalProbs.map(p => p * 100);
+                            probabilityChart.update();
+                            
+                            // Store for final processing
+                            sessionData.push({
+                                timestamp: Date.now(),
+                                low: finalProbs[0] * 100,
+                                moderate: finalProbs[1] * 100,
+                                high: finalProbs[2] * 100,
+                                severity: prediction.severity,
+                                confidence: prediction.confidence,
+                                modelPredictions: prediction.model_predictions
+                            });
+                            
+                            updateStatus('Real ensemble model prediction active', 'success');
+                            
+                            // Keep only last 60 frames to allow continuous predictions
+                            if (collectedAUFeatures.length > 60) {
+                                collectedAUFeatures = collectedAUFeatures.slice(-30);
+                            }
+                        }
+                    }
+                } else {
+                    // Still collecting frames
+                    updateStatus(`Collecting frames: ${collectedAUFeatures.length}/5`, 'info');
+                }
+                
+            } catch (error) {
+                console.error('Analysis error:', error);
             }
             
             isAnalyzing = false;
@@ -724,33 +819,60 @@
 
         // Process final comprehensive results
         function processFinalResults() {
-            if (sessionData.length === 0) return;
+            console.log('Processing final results, sessionData length:', sessionData.length);
             
-            // Calculate ensemble results from session data
-            const model1Results = simulateEnsembleModel(sessionData, 1.0);
-            const model2Results = simulateEnsembleModel(sessionData, 1.0);
-            const model3Results = simulateEnsembleModel(sessionData, 1.5); // Higher weight
+            if (sessionData.length === 0) {
+                console.log('No session data to process');
+                // Show default results if no predictions were made
+                document.getElementById('final-duration').textContent = document.getElementById('session-time').textContent;
+                document.getElementById('final-analyses').textContent = collectedAUFeatures.length;
+                document.getElementById('final-severity').textContent = 'Insufficient Data';
+                document.getElementById('final-confidence').textContent = 'Confidence: N/A';
+                document.getElementById('model1-result').textContent = 'N/A';
+                document.getElementById('model2-result').textContent = 'N/A';
+                document.getElementById('model3-result').textContent = 'N/A';
+                document.getElementById('live-results').style.display = 'none';
+                document.getElementById('final-results').style.display = 'block';
+                return;
+            }
             
-            // Confidence-weighted voting
-            const finalResults = confidenceWeightedVoting(model1Results, model2Results, model3Results);
+            // Use the last prediction from sessionData (real model predictions)
+            const lastPrediction = sessionData[sessionData.length - 1];
             
-            // Apply dynamic thresholding
-            const finalSeverity = applyDynamicThreshold(finalResults);
+            // Calculate average probabilities from all predictions
+            const avgLow = sessionData.reduce((sum, d) => sum + d.low, 0) / sessionData.length;
+            const avgModerate = sessionData.reduce((sum, d) => sum + d.moderate, 0) / sessionData.length;
+            const avgHigh = sessionData.reduce((sum, d) => sum + d.high, 0) / sessionData.length;
+            
+            const finalResults = [avgLow, avgModerate, avgHigh];
+            
+            // Determine final severity based on average
+            let finalSeverity = 'Low';
+            if (avgHigh > avgModerate * 1.2 && avgHigh > 35) {
+                finalSeverity = 'High';
+            } else if (avgModerate > 35) {
+                finalSeverity = 'Moderate';
+            }
             
             // Update final results display
             document.getElementById('final-duration').textContent = document.getElementById('session-time').textContent;
             document.getElementById('final-analyses').textContent = sessionData.length;
             document.getElementById('final-severity').textContent = finalSeverity;
             
-            // simulateEnsembleModel returns percentages (0-100), so use values directly
             const confidencePercent = Math.max(...finalResults).toFixed(1);
             document.getElementById('final-confidence').textContent = 'Confidence: ' + confidencePercent + '%';
             
-            // Update ensemble model results
-            // simulateEnsembleModel returns percentages (0-100), so use values directly
-            document.getElementById('model1-result').textContent = getSeverityFromResults(model1Results) + ' (' + Math.max(...model1Results).toFixed(1) + '%)';
-            document.getElementById('model2-result').textContent = getSeverityFromResults(model2Results) + ' (' + Math.max(...model2Results).toFixed(1) + '%)';
-            document.getElementById('model3-result').textContent = getSeverityFromResults(model3Results) + ' (' + Math.max(...model3Results).toFixed(1) + '%)';
+            // Update ensemble model results from real predictions
+            if (lastPrediction.modelPredictions && lastPrediction.modelPredictions.length >= 3) {
+                const mp = lastPrediction.modelPredictions;
+                document.getElementById('model1-result').textContent = getSeverityFromProbs(mp[0].probabilities) + ' (' + (Math.max(mp[0].probabilities.low, mp[0].probabilities.moderate, mp[0].probabilities.high) * 100).toFixed(1) + '%)';
+                document.getElementById('model2-result').textContent = getSeverityFromProbs(mp[1].probabilities) + ' (' + (Math.max(mp[1].probabilities.low, mp[1].probabilities.moderate, mp[1].probabilities.high) * 100).toFixed(1) + '%)';
+                document.getElementById('model3-result').textContent = getSeverityFromProbs(mp[2].probabilities) + ' (' + (Math.max(mp[2].probabilities.low, mp[2].probabilities.moderate, mp[2].probabilities.high) * 100).toFixed(1) + '%)';
+            } else {
+                document.getElementById('model1-result').textContent = finalSeverity + ' (' + confidencePercent + '%)';
+                document.getElementById('model2-result').textContent = finalSeverity + ' (' + confidencePercent + '%)';
+                document.getElementById('model3-result').textContent = finalSeverity + ' (' + confidencePercent + '%)';
+            }
             
             // Update final chart
             if (finalChart) {
@@ -767,6 +889,16 @@
             console.log('Switching to final results display');
             document.getElementById('live-results').style.display = 'none';
             document.getElementById('final-results').style.display = 'block';
+        }
+        
+        // Helper function to get severity from probabilities object
+        function getSeverityFromProbs(probs) {
+            const low = probs.low || 0;
+            const moderate = probs.moderate || 0;
+            const high = probs.high || 0;
+            if (high > moderate && high > low) return 'High';
+            if (moderate > low) return 'Moderate';
+            return 'Low';
         }
 
         // Simulate ensemble model processing
@@ -1182,6 +1314,7 @@
             
             // Reset session data for video analysis
             sessionData = [];
+            collectedAUFeatures = [];
             let currentFrame = 0;
             
             for (let t = 0; t < duration; t += frameInterval) {
@@ -1224,8 +1357,16 @@
 
         // Start continuous analysis
         function startContinuousAnalysis() {
+            console.log('Starting continuous analysis...');
+            
+            // Reset AU features collection
+            collectedAUFeatures = [];
+            totalAnalysisCount = 0;
+            
             // Start analysis every 3 seconds
-            analysisInterval = setInterval(simulateEnsembleAnalysis, 3000);
+            analysisInterval = setInterval(() => {
+                simulateEnsembleAnalysis();
+            }, 3000);
             
             // Start session timer
             sessionStartTime = Date.now();
@@ -1233,8 +1374,9 @@
             
             // Initial analysis
             setTimeout(() => {
+                console.log('Running initial analysis...');
                 simulateEnsembleAnalysis();
-            }, 1000);
+            }, 500);
         }
 
         // Stop continuous analysis
@@ -1407,6 +1549,7 @@
             
             // Reset session data
             sessionData = [];
+            collectedAUFeatures = [];
             sessionStartTime = null;
             
             // Reset charts
@@ -2134,29 +2277,43 @@
         async function loadPatientsForSelection() {
             if (patientId) return; // Don't load if patient is already selected
             
+            const listContainer = document.getElementById('patient-selection-list');
+            
             try {
                 console.log('Loading patients for selection...');
-                const resp = await fetch('/api/patients');
+                const resp = await fetch('/api/patients', {
+                    credentials: 'same-origin'
+                });
                 console.log('Response status:', resp.status);
+                
+                // Check if we got redirected to login
+                if (resp.redirected || resp.url.includes('/login')) {
+                    throw new Error('Session expired. Please refresh the page.');
+                }
                 
                 if (!resp.ok) {
                     throw new Error(`HTTP error! status: ${resp.status}`);
                 }
                 
+                // Check content type before parsing
+                const contentType = resp.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Invalid response from server (not JSON)');
+                }
+                
                 const data = await resp.json();
                 console.log('Patients data received:', data);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
                 
                 allPatients = data.patients || [];
                 console.log('Number of patients loaded:', allPatients.length);
                 
-                if (allPatients.length > 0) {
-                    console.log('First patient sample:', allPatients[0]);
-                }
-                
                 displayPatientsForSelection(allPatients);
             } catch (error) {
                 console.error('Error loading patients:', error);
-                const listContainer = document.getElementById('patient-selection-list');
                 if (listContainer) {
                     listContainer.innerHTML = `
                         <div class="text-center py-8">
