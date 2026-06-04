@@ -850,20 +850,12 @@
             // Use the last prediction from sessionData (real model predictions)
             const lastPrediction = sessionData[sessionData.length - 1];
             
-            // Calculate average probabilities from all predictions
-            const avgLow = sessionData.reduce((sum, d) => sum + d.low, 0) / sessionData.length;
-            const avgModerate = sessionData.reduce((sum, d) => sum + d.moderate, 0) / sessionData.length;
-            const avgHigh = sessionData.reduce((sum, d) => sum + d.high, 0) / sessionData.length;
-            
-            const finalResults = [avgLow, avgModerate, avgHigh];
-            
-            // Determine final severity based on average
-            let finalSeverity = 'Low';
-            if (avgHigh > avgModerate * 1.2 && avgHigh > 35) {
-                finalSeverity = 'High';
-            } else if (avgModerate > 35) {
-                finalSeverity = 'Moderate';
-            }
+            const finalResults = [
+                lastPrediction.low,
+                lastPrediction.moderate,
+                lastPrediction.high
+            ];
+            const finalSeverity = lastPrediction.severity;
             
             // Update final results display
             document.getElementById('final-duration').textContent = document.getElementById('session-time').textContent;

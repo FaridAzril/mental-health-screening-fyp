@@ -15,7 +15,7 @@ import json
 from functools import wraps
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
-from supabase_client_working import supabase
+from supabase_client_working import supabase, SUPABASE_SERVICE_KEY
 
 # Authentication functions
 def get_user_profile(user_id):
@@ -34,6 +34,22 @@ def get_user_profile(user_id):
         return None
     except Exception as e:
                 return None
+
+def get_doctor_status(user_id):
+    try:
+        response = supabase.table('doctors').select('status').eq('user_id', user_id).execute(auth_token=SUPABASE_SERVICE_KEY)
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                return data[0].get('status', 'active')
+        return None
+    except Exception as e:
+                return None
+
+def is_inactive_doctor(user_profile, user_id):
+    if not user_profile or user_profile.get('role') != 'doctor':
+        return False
+    return get_doctor_status(user_id) == 'inactive'
 
 def authenticate_user(email, password):
     """Authenticate user with Supabase"""
@@ -62,6 +78,9 @@ def authenticate_user(email, password):
                 # Get user profile
                 user_profile = get_user_profile(session['user']['id'])
                 if user_profile:
+                    if is_inactive_doctor(user_profile, session['user']['id']):
+                        session.clear()
+                        return False, None
                     session['user']['role'] = user_profile.get('role')
                     session['user']['name'] = user_profile.get('name')
                     session.modified = True
@@ -328,6 +347,9 @@ def dashboard():
         
         if not user_profile:
             return redirect(url_for('login'))
+        if is_inactive_doctor(user_profile, user_id):
+            session.clear()
+            return redirect(url_for('login'))
         
         auth_token = session['user'].get('access_token')
         role = user_profile.get('role', '')
@@ -442,6 +464,31 @@ def api_dashboard_stats():
         return {'stats': stats, 'user': user_profile}
     except Exception as e:
         return {'error': str(e)}, 500
+
+@app.route('/api/session/status')
+def api_session_status():
+    try:
+        if not is_session_valid():
+            session.clear()
+            return {'authenticated': False}, 401
+
+        user_id = session['user']['id']
+        user_profile = get_user_profile(user_id)
+        if not user_profile:
+            session.clear()
+            return {'authenticated': False}, 401
+
+        if is_inactive_doctor(user_profile, user_id):
+            session.clear()
+            return {'authenticated': False, 'account_status': 'inactive'}, 403
+
+        return {
+            'authenticated': True,
+            'role': user_profile.get('role'),
+            'account_status': 'active'
+        }, 200
+    except Exception as e:
+        return {'authenticated': False}, 401
 
 @app.route('/api/patients')
 @login_required
@@ -1414,13 +1461,10 @@ def predict_severity():
         total_weight = sum(weights)
         final_probs = weighted_results / total_weight
         
-        # Dynamic thresholding
+        # Pure argmax - pick the class with highest probability
         low, moderate, high = final_probs
-        severity = 'Low'
-        if high > moderate * 1.2 and high > 0.35:
-            severity = 'High'
-        elif moderate > 0.35:
-            severity = 'Moderate'
+        severity_classes = ['Low', 'Moderate', 'High']
+        severity = severity_classes[int(np.argmax(final_probs))]
         
         return {
             'severity': severity,

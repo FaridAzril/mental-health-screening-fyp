@@ -47,9 +47,9 @@ class EDAICDataProcessor:
     def load_detailed_labels(self):
         """Load PHQ-8 labels and return participant severity mapping"""
         # Try both possible label files
-        labels_file = self.data_path / "Detailed_PHQ8_Labels.csv"
+        labels_file = self.data_path / "detailed_lables.csv"
         if not labels_file.exists():
-            labels_file = self.data_path / "detailed_lables.csv"
+            labels_file = self.data_path / "Detailed_PHQ8_Labels.csv"
         
         df = pd.read_csv(labels_file)
         
