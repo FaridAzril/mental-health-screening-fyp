@@ -92,8 +92,7 @@ for split_name in ['dev', 'test']:
         processed_data[split_name]['X'] = X_s
         processed_data[split_name]['y'] = y_s
 
-# Temporal Jittering removed - it over-amplified minority classes and caused bias
-# The balanced window augmentation above is sufficient
+# No extra augmentation - synthetic noise copies hurt performance on this small dataset
 
 # Feature Masking - AU only
 all_features = data_processor.au_features + data_processor.pose_features + data_processor.gaze_features

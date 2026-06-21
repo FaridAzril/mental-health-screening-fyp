@@ -53,6 +53,7 @@ yarn-error.log*
 # Flask
 instance/
 .webassets-cache
+.secret_key
 
 # Jupyter Notebook
 .ipynb_checkpoints

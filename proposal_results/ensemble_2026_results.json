@@ -2,34 +2,34 @@
   "classification_report":{
     "0":{
       "Low\/None":{
-        "precision":0.625,
-        "recall":0.4285714286,
-        "f1-score":0.5084745763,
+        "precision":0.6857142857,
+        "recall":0.6857142857,
+        "f1-score":0.6857142857,
         "support":35.0
       },
       "Moderate":{
-        "precision":0.0,
-        "recall":0.0,
-        "f1-score":0.0,
+        "precision":0.25,
+        "recall":0.2222222222,
+        "f1-score":0.2352941176,
         "support":9.0
       },
       "High":{
-        "precision":0.25,
-        "recall":0.5833333333,
-        "f1-score":0.35,
+        "precision":0.3076923077,
+        "recall":0.3333333333,
+        "f1-score":0.32,
         "support":12.0
       },
-      "accuracy":0.3928571429,
+      "accuracy":0.5357142857,
       "macro avg":{
-        "precision":0.2916666667,
-        "recall":0.3373015873,
-        "f1-score":0.2861581921,
+        "precision":0.4144688645,
+        "recall":0.4137566138,
+        "f1-score":0.4136694678,
         "support":56.0
       },
       "weighted avg":{
-        "precision":0.4441964286,
-        "recall":0.3928571429,
-        "f1-score":0.3927966102,
+        "precision":0.5346840659,
+        "recall":0.5357142857,
+        "f1-score":0.5349579832,
         "support":56.0
       }
     }
@@ -37,33 +37,33 @@
   "confusion_matrix":{
     "0":[
       [
-        15,
-        4,
-        16
-      ],
-      [
-        4,
-        0,
-        5
-      ],
-      [
+        24,
         5,
-        0,
-        7
+        6
+      ],
+      [
+        4,
+        2,
+        3
+      ],
+      [
+        7,
+        1,
+        4
       ]
     ]
   },
   "macro_f1_score":{
-    "0":0.2861581921
+    "0":0.4136694678
   },
   "overall_accuracy":{
-    "0":0.3928571429
+    "0":0.5357142857
   },
   "target_achieved":{
     "0":false
   },
   "model_type":{
-    "0":"2026 Ensemble Final Strategy"
+    "0":"2026 Ensemble - Pure Argmax"
   },
   "classes":{
     "0":[
@@ -76,13 +76,13 @@
     "0":3
   },
   "dynamic_thresholding":{
-    "0":true
+    "0":false
   },
   "diagonal_accuracy":{
-    "0":0.3928571429
+    "0":0.5357142857
   },
   "diagonal_dominance_ratio":{
-    "0":1.2941176471
+    "0":2.3076923077
   },
   "evaluation_set":{
     "0":"Test"

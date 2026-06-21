@@ -200,8 +200,9 @@ class EDAICDataProcessor:
                 n_features = seq.shape[1] if seq.ndim > 1 else 1
                 
                 if seq_len >= self.sequence_length:
-                    # Truncate (take last N frames)
-                    padded = seq[-self.sequence_length:]
+                    # Uniform temporal sampling across entire interview
+                    indices = np.linspace(0, seq_len - 1, self.sequence_length, dtype=int)
+                    padded = seq[indices]
                 else:
                     # Pad with zeros at the beginning
                     padding = np.zeros((self.sequence_length - seq_len, n_features))

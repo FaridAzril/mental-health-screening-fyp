@@ -131,14 +131,22 @@ def login_required(f):
     return decorated_function
 
 app = Flask(__name__, static_folder='static')
-app.secret_key = secrets.token_hex(32)  # Generate secure secret key
+# Fixed secret key so sessions survive server restarts and work across multiple tabs
+_SECRET_KEY_FILE = os.path.join(os.path.dirname(__file__), '.secret_key')
+if os.path.exists(_SECRET_KEY_FILE):
+    with open(_SECRET_KEY_FILE, 'r') as _f:
+        app.secret_key = _f.read().strip()
+else:
+    app.secret_key = secrets.token_hex(32)
+    with open(_SECRET_KEY_FILE, 'w') as _f:
+        _f.write(app.secret_key)
 
 # Security Configuration
 app.config.update(
     SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    PERMANENT_SESSION_LIFETIME=timedelta(minutes=30)
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8)  # Match is_session_valid() 8-hour check
 )
 
 # Security Monitoring
@@ -469,17 +477,14 @@ def api_dashboard_stats():
 def api_session_status():
     try:
         if not is_session_valid():
-            session.clear()
             return {'authenticated': False}, 401
 
         user_id = session['user']['id']
         user_profile = get_user_profile(user_id)
         if not user_profile:
-            session.clear()
             return {'authenticated': False}, 401
 
         if is_inactive_doctor(user_profile, user_id):
-            session.clear()
             return {'authenticated': False, 'account_status': 'inactive'}, 403
 
         return {
@@ -690,12 +695,7 @@ def api_save_screening():
         if role != 'doctor':
             return {'error': 'Unauthorized - only doctors can save screenings'}, 403
         
-        # Debug: Check if request body is being received
-        print(f"DEBUG: Raw request data: {request.data}")
-        print(f"DEBUG: Request content type: {request.content_type}")
-        
         data = request.get_json()
-        print(f"DEBUG: Parsed JSON data: {data}")
         
         if not data:
             return {'error': 'No data received in request'}, 400
@@ -744,21 +744,12 @@ def api_save_screening():
                 if conf_score > 1:
                     conf_score = conf_score / 100.0
                 screening_data['confidence_score'] = conf_score
-                print(f"DEBUG: Confidence score processed: {conf_score}")
             except (ValueError, TypeError) as e:
-                print(f"DEBUG: Error processing confidence score: {e}")
                 pass
         
-        # Debug logging
-        print(f"DEBUG: Sending screening data: {screening_data}")
-        print(f"DEBUG: Patient ID: {patient_id} (type: {type(patient_id)})")
-        print(f"DEBUG: Doctor ID: {doctor_id} (type: {type(doctor_id)})")
-        print(f"DEBUG: Severity: {severity} (type: {type(severity)})")
         
         try:
             resp = supabase.table('screenings').insert(screening_data).execute(auth_token=SUPABASE_SERVICE_KEY)
-            print(f"DEBUG: Supabase response status: {resp.status_code}")
-            print(f"DEBUG: Supabase response text: {resp.text[:200] if hasattr(resp, 'text') else str(resp)}")
             
             if resp.status_code in [200, 201]:
                 # Only try to parse JSON if there's actual content
@@ -769,8 +760,6 @@ def api_save_screening():
                     return {'success': True, 'screening': screening_data}, 201
             return {'error': f'Failed to save screening: {resp.text[:200]}'}, 400
         except Exception as supabase_error:
-            print(f"DEBUG: Supabase exception: {supabase_error}")
-            print(f"DEBUG: Exception type: {type(supabase_error)}")
             return {'error': f'Supabase error: {str(supabase_error)}'}, 500
     except Exception as e:
                 return {'error': str(e)}, 500
@@ -1422,62 +1411,80 @@ def predict_severity():
         if au_features.shape != (1, 300, 17):
             return {'error': f'Invalid shape. Expected (1, 300, 17), got {au_features.shape}'}, 400
         
-        # Load models (cached)
-        if not hasattr(predict_severity, 'models_loaded'):
+        # Load models (cached) - 3x BiLSTM + 1x 2D CNN
+        # Guard against stale cache from old code that used predict_severity.models
+        if not hasattr(predict_severity, 'models_loaded') or \
+           not hasattr(predict_severity, 'bilstm_models'):
             print("Loading ensemble models...")
-            predict_severity.models = []
+            predict_severity.bilstm_models = []
             for i in range(1, 4):
                 model_path = f'models/ensemble_{i}.h5'
                 try:
                     model = tf.keras.models.load_model(model_path, compile=False)
-                    predict_severity.models.append(model)
+                    predict_severity.bilstm_models.append(model)
                     print(f"Loaded ensemble_{i}.h5")
                 except Exception as e:
                     print(f"Failed to load ensemble_{i}.h5: {e}")
                     return {'error': f'Model loading failed: {str(e)}'}, 500
+            # 2D CNN disabled in production - overfits to Moderate on unseen faces
+            # Documented as experiment in FYP report (see proposal_results/hybrid_ensemble_results.json)
+            predict_severity.cnn2d_model = None
             predict_severity.models_loaded = True
-            print("All ensemble models loaded!")
+            print("Models loaded! BiLSTM-only mode (2D CNN disabled)")
         
-        # Standardize input
+        # Standardize input (17 features)
         au_flat = au_features.reshape(-1, 17)
         mean = np.mean(au_flat, axis=0)
-        std = np.std(au_flat, axis=0) + 1e-8
-        au_scaled = (au_flat - mean) / std
-        au_processed = au_scaled.reshape(1, 300, 17)
+        std  = np.std(au_flat, axis=0) + 1e-8
+        au_scaled     = (au_flat - mean) / std
+        au_processed  = au_scaled.reshape(1, 300, 17).astype(np.float32)
         
-        # Get predictions from all 3 models
+        # BiLSTM ensemble - equal average across 3 models
+        bilstm_proba = np.zeros(3)
         model_predictions = []
-        for i, model in enumerate(predict_severity.models):
+        for i, model in enumerate(predict_severity.bilstm_models):
             pred = model.predict(au_processed, verbose=0)[0]
+            bilstm_proba += pred
             model_predictions.append(pred)
+        bilstm_proba /= len(predict_severity.bilstm_models)
         
-        # Ensemble voting with weights [1.0, 1.0, 1.5]
-        weights = [1.0, 1.0, 1.5]
-        weighted_results = np.zeros(3)
-        for i, pred in enumerate(model_predictions):
-            for j in range(3):
-                weighted_results[j] += pred[j] * weights[i]
+        if predict_severity.cnn2d_model is not None:
+            # Hybrid: BiLSTM 67% / 2D CNN 33%
+            au_img = np.transpose(au_processed, (0, 2, 1))[:, :, :, np.newaxis]
+            cnn2d_proba = predict_severity.cnn2d_model.predict(au_img, verbose=0)[0]
+            final_probs = (2 * bilstm_proba + 1 * cnn2d_proba) / 3
+            model_predictions.append({'model': '2D CNN', 'raw': cnn2d_proba})
+        else:
+            # Fallback: BiLSTM-only
+            final_probs = bilstm_proba
+            cnn2d_proba = None
         
-        total_weight = sum(weights)
-        final_probs = weighted_results / total_weight
+        low_p, mod_p, high_p = final_probs[0], final_probs[1], final_probs[2]
         
-        # Pure argmax - pick the class with highest probability
-        low, moderate, high = final_probs
-        severity_classes = ['Low', 'Moderate', 'High']
-        severity = severity_classes[int(np.argmax(final_probs))]
+        # Dynamic thresholding
+        if high_p > (mod_p * 1.2) and high_p > 0.35:
+            severity = 'High'
+        elif mod_p > 0.35:
+            severity = 'Moderate'
+        else:
+            severity = 'Low'
+        
+        pred_list = [
+            {'model': f'BiLSTM {i+1}', 'probabilities': {'low': float(p[0]), 'moderate': float(p[1]), 'high': float(p[2])}}
+            for i, p in enumerate(model_predictions[:3])
+        ]
+        if cnn2d_proba is not None:
+            pred_list.append({'model': '2D CNN', 'probabilities': {'low': float(cnn2d_proba[0]), 'moderate': float(cnn2d_proba[1]), 'high': float(cnn2d_proba[2])}})
         
         return {
             'severity': severity,
             'confidence': float(np.max(final_probs)),
             'probabilities': {
-                'low': float(low),
-                'moderate': float(moderate),
-                'high': float(high)
+                'low': float(low_p),
+                'moderate': float(mod_p),
+                'high': float(high_p)
             },
-            'model_predictions': [
-                {'model': f'Model {i+1}', 'probabilities': {'low': float(p[0]), 'moderate': float(p[1]), 'high': float(p[2])}}
-                for i, p in enumerate(model_predictions)
-            ]
+            'model_predictions': pred_list
         }
         
     except Exception as e:

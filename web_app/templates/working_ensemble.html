@@ -6,6 +6,7 @@
         // Patient context from URL parameter
         const patientId = "{{ patient_id or '' }}";
         console.log('Patient ID context:', patientId);
+        let currentPatientName = 'Unknown_Patient';
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -335,14 +336,6 @@
                             <div>
                                 <span class="text-gray-600">Total Analyses:</span>
                                 <span class="font-semibold ml-2" id="final-analyses">0</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">Data Points:</span>
-                                <span class="font-semibold ml-2">300 × 17 AU Features</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">Models Used:</span>
-                                <span class="font-semibold ml-2">3 Ensemble Models</span>
                             </div>
                         </div>
                     </div>
@@ -1318,6 +1311,7 @@
             // Reset session data for video analysis
             sessionData = [];
             collectedAUFeatures = [];
+            totalAnalysisCount = 0;
             let currentFrame = 0;
             
             for (let t = 0; t < duration; t += frameInterval) {
@@ -1340,11 +1334,30 @@
                 // Draw frame to canvas
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Run ensemble analysis on this frame
-                simulateEnsembleAnalysis();
+                // Extract AU features directly from this video frame
+                try {
+                    const frameData = canvas.toDataURL('image/jpeg', 0.8);
+                    const auResponse = await fetch('/extract-au-features', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
+                        body: JSON.stringify({frame_data: frameData})
+                    });
+                    if (auResponse.ok) {
+                        const auResult = await auResponse.json();
+                        if (!auResult.error && auResult.au_features) {
+                            collectedAUFeatures.push(auResult.au_features);
+                            totalAnalysisCount++;
+                            const framesCount = document.getElementById('frames-count');
+                            if (framesCount) framesCount.textContent = totalAnalysisCount;
+                        }
+                    }
+                } catch (e) {
+                    console.error('AU extraction error at t=' + t, e);
+                }
                 
                 currentFrame++;
-                updateStatus(`Analyzing video: frame ${currentFrame}/${totalFrames}...`, 'analyzing');
+                updateStatus(`Analyzing video: frame ${currentFrame}/${totalFrames} (${collectedAUFeatures.length} AU features collected)...`, 'analyzing');
                 
                 // Update session time display
                 const minutes = Math.floor(t / 60);
@@ -1353,9 +1366,60 @@
                     minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
             }
             
+            // After all frames processed, run one final prediction using all collected AU features
+            if (collectedAUFeatures.length >= 5) {
+                updateStatus('Running model prediction on video data...', 'analyzing');
+                
+                // Pad/repeat collected frames up to 300
+                let paddedFeatures = [];
+                while (paddedFeatures.length < 300) {
+                    paddedFeatures = paddedFeatures.concat(collectedAUFeatures);
+                }
+                paddedFeatures = paddedFeatures.slice(0, 300);
+                
+                try {
+                    const predictResponse = await fetch('/predict-severity', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        credentials: 'same-origin',
+                        body: JSON.stringify({au_features: paddedFeatures})
+                    });
+                    if (predictResponse.ok) {
+                        const prediction = await predictResponse.json();
+                        if (!prediction.error) {
+                            const finalProbs = [
+                                prediction.probabilities.low,
+                                prediction.probabilities.moderate,
+                                prediction.probabilities.high
+                            ];
+                            document.getElementById('severity-prediction').textContent = prediction.severity;
+                            document.getElementById('confidence-score').textContent = 'Confidence: ' + (prediction.confidence * 100).toFixed(1) + '%';
+                            probabilityChart.data.datasets[0].data = finalProbs.map(p => p * 100);
+                            probabilityChart.update();
+                            sessionData.push({
+                                timestamp: Date.now(),
+                                low: finalProbs[0] * 100,
+                                moderate: finalProbs[1] * 100,
+                                high: finalProbs[2] * 100,
+                                severity: prediction.severity,
+                                confidence: prediction.confidence,
+                                modelPredictions: prediction.model_predictions
+                            });
+                            updateStatus('Video analysis complete', 'success');
+                        } else {
+                            updateStatus('Prediction error: ' + prediction.error, 'error');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Prediction error:', e);
+                    updateStatus('Prediction failed', 'error');
+                }
+            } else {
+                updateStatus(`Not enough face data in video (${collectedAUFeatures.length} frames with face detected, need 5+)`, 'error');
+            }
+            
             // Video analysis complete
             video.controls = true;
-            updateStatus('Video analysis complete', 'success');
         }
 
         // Start continuous analysis
@@ -1797,7 +1861,7 @@
             });
             
             // Save PDF
-            const pdfFileName = `mental_health_screening_${new Date().toISOString().split('T')[0]}.pdf`;
+            const pdfFileName = `screening_report_${currentPatientName}_${new Date().toISOString().split('T')[0]}.pdf`;
             doc.save(pdfFileName);
             
             updateStatus('PDF exported successfully', 'success');
@@ -1813,6 +1877,9 @@
                 
                 if (data.patient) {
                     const patient = data.patient;
+                    if (patient.name) {
+                        currentPatientName = patient.name.trim().replace(/\s+/g, '_');
+                    }
                     const patientDetails = document.getElementById('patient-details');
                     
                     if (!patientDetails) {
